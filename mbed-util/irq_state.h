@@ -26,6 +26,7 @@ namespace util {
 #ifdef TARGET_NORDIC
     typedef uint8_t  irqstate_t;
 #elif defined(TARGET_LIKE_POSIX)
+    #include <signal.h>
     typedef sigset_t irqstate_t;
 #else
     typedef uint32_t irqstate_t;
