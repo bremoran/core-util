@@ -20,9 +20,7 @@
 
 #include <stdint.h>
 #include "cmsis-core/core_generic.h"
-#ifdef TARGET_NORDIC
-#include "nrf_soc.h"
-#endif
+#include "mbed-util/irq_state.h"
 
 namespace mbed {
 namespace util {
@@ -44,32 +42,18 @@ namespace util {
 class CriticalSectionLock {
 public:
     CriticalSectionLock() {
-#ifdef TARGET_NORDIC
-        sd_nvic_critical_region_enter(&_state);
-#else
-        _state = __get_PRIMASK();
-        __disable_irq();
-#endif
+        _state = pushDisableIRQState();
     }
 
     ~CriticalSectionLock() {
-#ifdef TARGET_NORDIC
-        sd_nvic_critical_region_exit(_state);
-#else
-        __set_PRIMASK(_state);
-#endif
+        popDisableIRQState(_state);
     }
 
 private:
-#ifdef TARGET_NORDIC
-    uint8_t  _state;
-#else
-    uint32_t _state;
-#endif
+    irqstate_t _state;
 };
 
 } // namespace util
 } // namespace mbed
 
 #endif // #ifndef __MBED_UTIL_CRITICAL_SECTION_LOCK_H__
-
