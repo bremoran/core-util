@@ -28,11 +28,6 @@
 #define EVENT_STORAGE_SIZE 32
 #endif
 
-#define MBED_STATIC_ASSERT(MBED_STATIC_ASSERT_FAILED,MSG)\
-    switch(0){\
-        case 0:case (MBED_STATIC_ASSERT_FAILED): \
-        break;}
-
 namespace mbed {
 namespace util {
 
@@ -81,7 +76,7 @@ public:
 
     template<typename S>
     FunctionPointerBind<R> & bind(const struct FunctionPointerBase<R>::ArgOps * ops , S * argStruct, FunctionPointerBase<R> *fp, ...) {
-        MBED_STATIC_ASSERT(sizeof(S) <= sizeof(_storage), ERROR: Arguments too large for FunctionPointerBind internal storage)
+        static_assert(sizeof(S) <= sizeof(_storage), "ERROR: Arguments too large for FunctionPointerBind internal storage")
         if (_ops != &FunctionPointerBase<R>::_nullops) {
             _ops->destructor(_storage);
         }
