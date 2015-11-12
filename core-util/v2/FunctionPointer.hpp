@@ -23,10 +23,13 @@
 #include <new>
 #include <utility>
 #include <cstdio>
+#include <type_traits>
 
 namespace mbed {
 namespace util {
 
+
+namespace impl{
 template <typename FunctionType>
 class FunctionPointerInterface;
 
@@ -43,6 +46,7 @@ public:
     typedef void (UnknownClass::*UnknownFunctionMember_t)();
 
     union {
+
         void * _static_fp;
         struct {
             union {
@@ -56,15 +60,15 @@ public:
     };
 };
 
-template <typename FunctionType>
-class FunctionPointerImpl : public FunctionPointerInterface<FunctionType> {
+class FunctionPointerSize0 {
 public:
     FunctionPointerStorage _fp;
+    virtual void nullmethod()=0;
 };
-
-template <typename FunctionType>
-class FPAlignmentAndSize;
-
+class FunctionPointerSize : public FunctionPointerSize0 {
+public:
+    void nullmethod() {}
+};
 template<class T>
 T&& forward(typename std::remove_reference<T>::type& a) noexcept
 {
@@ -77,12 +81,6 @@ T&& forward(typename std::remove_reference<T>::type&& a) noexcept
 }
 
 template<typename FunctionType>
-class FunctionPointer;
-
-template<typename CallableType, size_t>
-class FunctionPointerBind;
-
-template<typename FunctionType>
 class StaticPointer;
 
 template<typename FunctionType, typename C>
@@ -90,7 +88,10 @@ class MethodPointer;
 
 template<typename FunctionType, typename F>
 class FunctorPointer;
+}
 
+template<typename FunctionType>
+class FunctionPointer;
 
 
 #include "impl/FP0.hpp"

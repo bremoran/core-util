@@ -20,74 +20,62 @@
 #endif
 
 template <typename R, typename A1>
-class FunctionPointerInterface<R(A1)> : protected FunctionPointerStorage {
-public:
-    virtual operator bool() const = 0;
-    virtual bool operator ==(const FunctionPointerInterface &) const = 0;
-    virtual FunctionPointerInterface & operator =(const FunctionPointerInterface &) = 0;
-    virtual R call(A1&&) const = 0;
-    virtual ~FunctionPointerInterface(){};
-protected:
-    virtual void copy_to(void *) const = 0;
-};
-
-template <typename R, typename A1>
-class FPAlignmentAndSize<R(A1)> : public FunctionPointerImpl<R(A1)> {
-    operator bool() const {return false;}
-    bool operator ==(const FunctionPointerInterface<R(A1)> & rhs) const { return false;}
-    FunctionPointerInterface<R(A1)> & operator =(const FunctionPointerInterface<R(A1)> &) { return *this; }
-    R call (A1&&) const { return R();}
-    ~FPAlignmentAndSize() {}
-protected:
-    void copy_to(void *target) const {
-        new(target) FPAlignmentAndSize(*this);
-    }
-};
-
-
-template <typename R, typename A1>
 class FunctionPointer<R(A1)> {
 public:
     typedef struct arg_struct{
     } ArgStruct;
     typedef R(*static_fp)(A1);
     FunctionPointer(R (*fp)(A1)) {
-        new(_storage) StaticPointer<R(A1)>(fp);
+        new(_storage) impl::StaticPointer<R(A1)>(fp);
     }
     template <typename C>
     FunctionPointer(C *c, R (C::*member)(A1)) {
-        new(_storage) MethodPointer<R(A1), C>(c, member);
+        new(_storage) impl::MethodPointer<R(A1), C>(c, member);
     }
     template <typename F>
     FunctionPointer(const F & f) {
-        new(_storage) FunctorPointer<R(A1), F>(f);
+        new(_storage) impl::FunctorPointer<R(A1), F>(f);
     }
     operator bool() const {
-        return *reinterpret_cast<FunctionPointerImpl<R(A1)> *>(const_cast<char *>(_storage));
+        return *reinterpret_cast<impl::FunctionPointerInterface<R(A1)> *>(const_cast<char *>(_storage));
     }
-    bool operator ==(const FunctionPointerInterface<R(A1)> & rhs) const {
-        return *reinterpret_cast<FunctionPointerImpl<R(A1)> *>(const_cast<char *>(_storage)) == rhs;
+    bool operator ==(const impl::FunctionPointerInterface<R(A1)> & rhs) const {
+        return *reinterpret_cast<impl::FunctionPointerInterface<R(A1)> *>(const_cast<char *>(_storage)) == rhs;
     }
     inline R operator ()(A1&& a1) const {
-        return call(forward<A1&&>(a1));
+        return call(impl::forward<A1&&>(a1));
     }
     R call(A1&& a1) const {
-        return reinterpret_cast<FunctionPointerImpl<R(A1)>*>(_storage)->call(forward<A1&&>(a1));
+        return reinterpret_cast<impl::FunctionPointerInterface<R(A1)>*>(_storage)->call(impl::forward<A1&&>(a1));
     }
     ~FunctionPointer() {
-        reinterpret_cast<FunctionPointerImpl<R(A1)>*>(_storage)->~FunctionPointerImpl<R(A1)>();
+        reinterpret_cast<impl::FunctionPointerInterface<R(A1)>*>(_storage)->~FunctionPointerInterface<R(A1)>();
     }
 protected:
     union {
-        char _storage[sizeof(FPAlignmentAndSize<R(A1)>)];
-        FPAlignmentAndSize<R(A1)> _alignementAndSizeGuarantees;
+        char _storage[sizeof(impl::FunctionPointerSize)];
+        impl::FunctionPointerSize _alignementAndSizeGuarantees;
     };
+};
+
+namespace impl {
+template <typename R, typename A1>
+class FunctionPointerInterface<R(A1)> : protected impl::FunctionPointerStorage {
+public:
+    virtual operator bool() const = 0;
+    virtual bool operator ==(const FunctionPointerInterface &) const = 0;
+    virtual FunctionPointerInterface & operator =(const FunctionPointerInterface &) = 0;
+    virtual R call(A1&&) const = 0;
+    virtual ~FunctionPointerInterface(){};
+    virtual void copy_to(void *) const = 0;
+protected:
+    impl::FunctionPointerStorage _fp;
 };
 
 /** A class for storing and calling a pointer to a static or member void function without arguments
  */
 template <typename R, typename A1>
-class StaticPointer<R(A1)> : public FunctionPointerImpl<R(A1)>{
+class StaticPointer<R(A1)> : public FunctionPointerInterface<R(A1)>{
 public:
     StaticPointer(R (*function)(A1) = 0)
     {
@@ -125,7 +113,7 @@ public:
 };
 
 template<typename R, typename A1, typename C>
-class MethodPointer<R(A1), C> : public FunctionPointerImpl<R(A1)>{
+class MethodPointer<R(A1), C> : public FunctionPointerInterface<R(A1)>{
 public:
     MethodPointer(C *object, R (C::*member)(A1))
     {
@@ -167,7 +155,8 @@ public:
 };
 
 template<typename R, typename A1, typename F>
-class FunctorPointer<R(A1), F> : public FunctionPointerImpl<R(A1)>{
+class FunctorPointer<R(A1), F> : public FunctionPointerInterface<R(A1)>{
+    constexpr static const bool Internal = sizeof(F) <= sizeof(impl::FunctionPointerStorage);
 public:
     FunctorPointer(const F & f)
     {
@@ -176,34 +165,75 @@ public:
     FunctorPointer(const FunctorPointer & fp) {
         *this = fp;
     }
-    void attach(const F & f) {
+    template <typename T = F>
+    typename std::enable_if<Internal && std::is_same<T,F>::value>::type
+    attach(const F & f)
+    {
         new(this->_fp._functor_storage)F(f);
     }
+    template <typename T = F>
+    typename std::enable_if<!Internal && std::is_same<T,F>::value>::type
+    attach(const F & f) {
+        this->_fp._external_functor = new F(f);
+    }
     R call(A1&& a1) const{
-        return reinterpret_cast<const F &>(this->_fp._functor_storage)(forward<A1>(a1));
+        return const_ref()(forward<A1>(a1));
     }
     R (*get_function() const)(){
         return NULL;
     }
     operator bool() const {
-        return (bool)reinterpret_cast<const F &>(this->_fp._functor_storage);
+        return true;
     }
     bool operator ==(const FunctionPointerInterface<R(A1)> & rhs) const {
-        return (reinterpret_cast<const F &>(this->_fp._functor_storage) ==
-                reinterpret_cast<const F &>(static_cast<const FunctorPointer *>(&rhs)->_fp._functor_storage));
+        return false;
     }
     FunctionPointerInterface<R(A1)> & operator = (const FunctionPointerInterface<R(A1)> & rhs) {
         return *this = *static_cast<const FunctorPointer *>(&rhs);
     }
     FunctorPointer & operator = (const FunctorPointer & rhs) {
-        new(this->_fp._functor_storage) F(reinterpret_cast<const F &>(rhs._fp._functor_storage));
+        deallocate();
+        attach(rhs.const_ref());
         return *this;
     }
     void copy_to(void * storage) const {
         new(storage) FunctorPointer(*this);
     }
     ~FunctorPointer() {
+        deallocate();
+    }
+protected:
+    template <typename T = F>
+    typename std::enable_if<Internal && std::is_same<T,F>::value, const F &>::type
+    const_ref() const{
+        return *reinterpret_cast<const F *>(this->_fp._functor_storage);
+    }
+    template <typename T = F>
+    typename std::enable_if<Internal && std::is_same<T,F>::value, F &>::type
+    ref() {
+        return *reinterpret_cast<F *>(this->_fp._functor_storage);
+    }
+    template <typename T = F>
+    typename std::enable_if<Internal && std::is_same<T,F>::value>::type
+    deallocate() {
         reinterpret_cast<F*>(this->_fp._functor_storage)->~F();
     }
+
+    template <typename T = F>
+    typename std::enable_if<!Internal && std::is_same<T,F>::value, const F &>::type
+    const_ref() const{
+        return *reinterpret_cast<const F *>(this->_fp._external_functor);
+    }
+    template <typename T = F>
+    typename std::enable_if<!Internal && std::is_same<T,F>::value, F &>::type
+    ref() {
+        return *reinterpret_cast<F *>(this->_fp._external_functor);
+    }
+    template <typename T = F>
+    typename std::enable_if<!Internal && std::is_same<T,F>::value>::type
+    deallocate() {
+        reinterpret_cast<F*>(this->_fp._external_functor)->~F();
+    }
 };
+}
 #endif
