@@ -30,9 +30,8 @@ namespace util {
 
 
 namespace impl{
-template <typename FunctionType>
-class FunctionPointerInterface;
 
+template<size_t I = 0>
 class FunctionPointerStorage {
 public:
     // Forward declaration of an unknown class
@@ -46,7 +45,6 @@ public:
     typedef void (UnknownClass::*UnknownFunctionMember_t)();
 
     union {
-
         void * _static_fp;
         struct {
             union {
@@ -55,19 +53,24 @@ public:
             };
             void * _object;
         } _method;
-        char _functor_storage[sizeof(UnknownFunctionMember_t) + sizeof(void *)];
+        char _raw_storage[sizeof(void*) + sizeof(UnknownFunctionMember_t) + I];
         void * _external_functor;
     };
 };
 
+template<size_t I = 0>
 class FunctionPointerSize0 {
 public:
-    FunctionPointerStorage _fp;
+    FunctionPointerStorage<I> _fp;
     virtual void nullmethod()=0;
 };
-class FunctionPointerSize : public FunctionPointerSize0 {
+
+template<size_t I = 0>
+class FunctionPointerSize : public FunctionPointerSize0<I> {
 public:
     void nullmethod() {}
+    FunctionPointerSize(){}
+    FunctionPointerSize(const FunctionPointerSize &){}
 };
 template<class T>
 T&& forward(typename std::remove_reference<T>::type& a) noexcept
@@ -79,18 +82,23 @@ T&& forward(typename std::remove_reference<T>::type&& a) noexcept
 {
     return static_cast<T&&>(a);
 }
+template <typename FunctionType, size_t I = 0>
+class FunctionPointerInterface;
 
-template<typename FunctionType>
+template<typename FunctionType, size_t I = 0>
 class StaticPointer;
 
-template<typename FunctionType, typename C>
+template<typename FunctionType, typename C, size_t I = 0>
 class MethodPointer;
 
-template<typename FunctionType, typename F>
+template<typename FunctionType, typename F, size_t I = 0>
 class FunctorPointer;
 }
 
-template<typename FunctionType>
+template <typename OutputSignature, typename InputSignature, size_t I>
+class FPFunctor;
+
+template<typename FunctionType, size_t I = 0>
 class FunctionPointer;
 
 

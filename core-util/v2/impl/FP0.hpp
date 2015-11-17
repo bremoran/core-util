@@ -19,23 +19,23 @@
 #error FP0.hpp is an internal file that should only be called from inside FunctionPointer.hpp
 #endif
 
-template<typename R>
-class FunctionPointer<R()> {
+template<typename R, size_t I>
+class FunctionPointer<R(), I> {
 public:
     typedef struct arg_struct{
     } ArgStruct;
     typedef R(*static_fp)(void);
 
     FunctionPointer(R (*fp)()) {
-        new(_storage) impl::StaticPointer<R()>(fp);
+        new(_storage) impl::StaticPointer<R(), I>(fp);
     }
     template <typename C>
     FunctionPointer(C *c, R (C::*member)()) {
-        new(_storage) impl::MethodPointer<R(), C>(c, member);
+        new(_storage) impl::MethodPointer<R(), C, I>(c, member);
     }
     template <typename F>
     FunctionPointer(const F & f) {
-        new(_storage) impl::FunctorPointer<R(), F>(f);
+        new(_storage) impl::FunctorPointer<R(), F, I>(f);
     }
     operator bool() const {
         return *reinterpret_cast<impl::FunctionPointerInterface<R()> *>(&_storage);
@@ -60,14 +60,14 @@ public:
     }
 protected:
     union {
-        char _storage[sizeof(impl::FunctionPointerSize)];
-        impl::FunctionPointerSize _alignementAndSizeGuarantees;
+        char _storage[sizeof(impl::FunctionPointerSize<I>)];
+        impl::FunctionPointerSize<I> _alignementAndSizeGuarantees;
     };
 };
 
 namespace impl {
-template <typename R>
-class FunctionPointerInterface<R()>{
+template <typename R, size_t I>
+class FunctionPointerInterface<R(),I>{
 public:
     virtual operator bool() const = 0;
     virtual bool operator ==(const FunctionPointerInterface &) const = 0;
@@ -75,13 +75,13 @@ public:
     virtual ~FunctionPointerInterface(){};
     virtual void copy_to(void *) const = 0;
 protected:
-    FunctionPointerStorage _fp;
+    FunctionPointerStorage<I> _fp;
 };
 
 /** A class for storing and calling a pointer to a static or member void function without arguments
  */
-template<typename R>
-class StaticPointer<R()> : public FunctionPointerInterface<R()>{
+template<typename R, size_t I>
+class StaticPointer<R(), I> : public FunctionPointerInterface<R(), I>{
 public:
     StaticPointer(R (*function)() = 0)
     {
@@ -114,8 +114,8 @@ public:
     }
 };
 
-template<typename R, typename C>
-class MethodPointer<R(), C> : public FunctionPointerInterface<R()>{
+template<typename R, typename C, size_t I>
+class MethodPointer<R(), C, I> : public FunctionPointerInterface<R(), I>{
 public:
     MethodPointer(C *object, R (C::*member)(void))
     {
@@ -155,22 +155,23 @@ public:
 
 
 
-template<typename R, typename F>
-class FunctorPointer<R(), F> : public FunctionPointerInterface<R()>{
-    constexpr static const bool Internal = sizeof(F) <= sizeof(impl::FunctionPointerStorage);
+template<typename R, typename F, size_t I>
+class FunctorPointer<R(), F, I> : public FunctionPointerInterface<R(), I>{
+    constexpr static const bool Internal = sizeof(F) <= sizeof(impl::FunctionPointerStorage<I>);
 public:
     FunctorPointer(const F & f)
     {
         attach(f);
     }
-    FunctorPointer(const FunctorPointer & fp) {
+    FunctorPointer(const FunctorPointer & fp)
+    {
         *this = fp;
     }
     template <typename T = F>
     typename std::enable_if<Internal && std::is_same<T,F>::value>::type
     attach(const F & f)
     {
-        new(this->_fp._functor_storage)F(f);
+        new(this->_fp._raw_storage)F(f);
     }
     template <typename T = F>
     typename std::enable_if<!Internal && std::is_same<T,F>::value>::type
@@ -186,12 +187,12 @@ public:
     operator bool() const {
         return true;
     }
-    bool operator ==(const FunctionPointerInterface<R()> & rhs) const {
+    bool operator ==(const FunctionPointerInterface<R(), I> & rhs) const {
         return false;
     }
     FunctorPointer & operator = (const FunctorPointer & rhs) {
         deallocate();
-        attach(*reinterpret_cast<const F *>(rhs._fp._functor_storage));
+        attach(*reinterpret_cast<const F *>(rhs._fp._raw_storage));
         return *this;
     }
     ~FunctorPointer() {
@@ -204,17 +205,17 @@ protected:
     template <typename T = F>
     typename std::enable_if<Internal && std::is_same<T,F>::value, const F &>::type
     const_ref() const{
-        return *reinterpret_cast<const F *>(this->_fp._functor_storage);
+        return *reinterpret_cast<const F *>(this->_fp._raw_storage);
     }
     template <typename T = F>
     typename std::enable_if<Internal && std::is_same<T,F>::value, F &>::type
     ref() {
-        return *reinterpret_cast<F *>(this->_fp._functor_storage);
+        return *reinterpret_cast<F *>(this->_fp._raw_storage);
     }
     template <typename T = F>
     typename std::enable_if<Internal && std::is_same<T,F>::value>::type
     deallocate() {
-        reinterpret_cast<F*>(this->_fp._functor_storage)->~F();
+        reinterpret_cast<F*>(this->_fp._raw_storage)->~F();
     }
 
     template <typename T = F>
