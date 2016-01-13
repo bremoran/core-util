@@ -1,0 +1,49 @@
+/* mbed Microcontroller Library
+ * Copyright (c) 2006-2015 ARM Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#ifndef FUNCTIONAL_DETAIL_STATIC_HPP
+#define FUNCTIONAL_DETAIL_STATIC_HPP
+
+#include "interface.hpp"
+#include "allocators.hpp"
+
+namespace functional {
+namespace detail {
+template <typename FunctionType>
+class StaticContainer;
+
+template <typename ReturnType, typename... ArgTypes>
+class StaticContainer <ReturnType(ArgTypes...)> : public FunctionInterface <ReturnType(ArgTypes...)> {
+public:
+    typedef ReturnType (*staticFPType)(ArgTypes...);
+    StaticContainer() : fp (nullptr) {}
+    StaticContainer(staticFPType fp) : fp (fp) {}
+    virtual ReturnType operator () (ArgTypes&&... Args) {
+        return fp(forward<ArgTypes>(Args)...);
+    }
+    virtual ContainerAllocator * getAllocator() {
+        return & StaticFPAllocator;
+    }
+
+    // virtual void deallocate(FunctionInterface<ReturnType(ArgTypes...)> *ptr) {
+    //     ptr->~FunctionInterface();
+    //     StaticFPAllocator.free(ptr);
+    // }
+protected:
+    staticFPType fp;
+};
+} // namespace detail
+} // namespace functional
+#endif // FUNCTIONAL_DETAIL_STATIC_HPP
