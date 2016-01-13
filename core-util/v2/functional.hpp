@@ -37,8 +37,16 @@
 #include <utility>
 #include <cstdio>
 #include <type_traits>
+#include <tuple>
 
 #include "core-util/ExtendablePoolAllocator.h"
+
+namespace functional {
+template <typename FunctionType>
+class Function;
+
+} // namespace functional
+
 #include "detail/forward.hpp"
 #include "detail/interface.hpp"
 #include "detail/static.hpp"
@@ -54,10 +62,51 @@ namespace functional {
 // }
 
 namespace detail {
+    
+template<int ...>
+struct seq { };
+
+template<int N, int ...S>
+struct gens : gens<N-1, N-1, S...> { };
+
+template<int ...S>
+struct gens<0, S...> {
+  typedef seq<S...> type;
+};
+
+
+template <typename FunctionType, ContainerAllocator & Allocator, typename... CapturedTypes>
+class CapturedArguments;
+
+template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Allocator, typename... CapturedTypes>
+class CapturedArguments <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
+        : public FunctionInterface <ReturnType(ArgTypes...)> {
+protected:
+    // typedef typename make_indices<0, CapturedTypes...>::type Indices;
+    typedef typename gens<sizeof...(CapturedTypes)>::type Indicies;
+public:
+    CapturedArguments(Function<ReturnType(ArgTypes..., CapturedTypes...)> & f, CapturedTypes&&... CapturedArgs) :
+        f(f), storage(CapturedArgs...)
+    {}
+
+    virtual ReturnType operator () (ArgTypes&&... Args) {
+        return idxcall(typename gens<sizeof...(CapturedTypes)>::type(),forward<ArgTypes>(Args)...);
+    }
+    template <int... S>
+    inline ReturnType idxcall(seq<S...>,  ArgTypes&&... Args) {
+        return f(forward<ArgTypes>(Args)..., forward<CapturedTypes>(std::get<S>(storage))...);
+    }
+
+    virtual ContainerAllocator * getAllocator() {
+        return & Allocator;
+    }
+protected:
+
+    Function<ReturnType(ArgTypes..., CapturedTypes...)> & f;
+    std::tuple<CapturedTypes...> storage;
+};
 } // namespace detail
 
-template <typename FunctionType>
-class Function;
 
 template <typename ReturnType, typename... ArgTypes>
 class Function <ReturnType(ArgTypes...)> {
@@ -98,6 +147,16 @@ public:
     Function(const Function & f): ref(f.ref) {
         ref && ref->inc();
     }
+    template <typename... CapturedTypes>
+    Function(Function<ReturnType(ArgTypes..., CapturedTypes...)> & f, CapturedTypes&&... CapturedArgs) {
+        typedef typename detail::CapturedArguments<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
+        CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
+        new(newf) CaptureFP(f, std::forward<CapturedTypes>(CapturedArgs)...);
+        ref = newf;
+        ref->inc();
+    }
+
+
     ~Function() {
         ref && ref->dec() && ref->getAllocator()->free(ref);
     }
