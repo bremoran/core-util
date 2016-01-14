@@ -2,9 +2,9 @@
  * Copyright (c) 2015 ARM Limited
  */
 
-#include <core-util/v2/functional.hpp>
-#include <mbed-drivers/app.h>
-
+#include <cstdio>
+#include "core-util/v2/functional.hpp"
+#include "mbed-drivers/app.h"
 
 void testprnt() {
     printf("%s\r\n", __PRETTY_FUNCTION__);
