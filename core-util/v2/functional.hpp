@@ -173,8 +173,8 @@ public:
     //     ref = newf;
     //     ref->inc();
     // }
-    template <typename... CapturedTypes>
-    Function(std::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes...,ArgTypes...)>& f) {
+    template <typename... CapturedTypes, typename... ParentArgTypes>
+    Function(std::tuple<CapturedTypes...>& t, Function<ReturnType(ParentArgTypes...)>& f) {
         typedef typename detail::CapturedArguments<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
         static_assert(sizeof(CaptureFP) <= 40, "Size of bound arguments is too large" );
         CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
