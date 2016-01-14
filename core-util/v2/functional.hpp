@@ -62,18 +62,19 @@ namespace functional {
 // }
 
 namespace detail {
-    
-template<int ...>
-struct seq { };
 
-template<int N, int ...S>
-struct gens : gens<N-1, N-1, S...> { };
+namespace index {
+template<std::size_t ...>
+struct sequence { };
 
-template<int ...S>
-struct gens<0, S...> {
-  typedef seq<S...> type;
+template<std::size_t N, std::size_t ...S>
+struct generator : generator<N-1, N-1, S...> { };
+
+template<std::size_t ...S>
+struct generator<0, S...> {
+  typedef sequence<S...> type;
 };
-
+} // namespace index
 
 template <typename FunctionType, ContainerAllocator & Allocator, typename... CapturedTypes>
 class CapturedArguments;
@@ -81,20 +82,20 @@ class CapturedArguments;
 template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Allocator, typename... CapturedTypes>
 class CapturedArguments <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
         : public FunctionInterface <ReturnType(ArgTypes...)> {
-protected:
-    // typedef typename make_indices<0, CapturedTypes...>::type Indices;
-    typedef typename gens<sizeof...(CapturedTypes)>::type Indicies;
 public:
-    CapturedArguments(Function<ReturnType(ArgTypes..., CapturedTypes...)> & f, CapturedTypes&&... CapturedArgs) :
-        f(f), storage(CapturedArgs...)
+    // CapturedArguments(Function<ReturnType(CapturedTypes..., ArgTypes...)> & f, CapturedTypes&&... CapturedArgs) :
+    //     f(f), storage(CapturedArgs...)
+    // {}
+    CapturedArguments(const std::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes..., ArgTypes...)>& f):
+        f(f), storage(t)
     {}
 
     virtual ReturnType operator () (ArgTypes&&... Args) {
-        return idxcall(typename gens<sizeof...(CapturedTypes)>::type(),forward<ArgTypes>(Args)...);
+        return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), forward<ArgTypes>(Args)...);
     }
-    template <int... S>
-    inline ReturnType idxcall(seq<S...>,  ArgTypes&&... Args) {
-        return f(forward<ArgTypes>(Args)..., forward<CapturedTypes>(std::get<S>(storage))...);
+    template <size_t... S>
+    inline ReturnType idxcall(index::sequence<S...>,  ArgTypes&&... Args) {
+        return f(forward<CapturedTypes>(std::get<S>(storage))..., forward<ArgTypes>(Args)...);
     }
 
     virtual ContainerAllocator * getAllocator() {
@@ -102,9 +103,25 @@ public:
     }
 protected:
 
-    Function<ReturnType(ArgTypes..., CapturedTypes...)> & f;
+    Function<ReturnType(CapturedTypes..., ArgTypes...)> & f;
     std::tuple<CapturedTypes...> storage;
 };
+
+#include <type_traits>
+template <typename FunctionType, typename... ToRemove> struct RemoveArgs {};
+
+template <typename ReturnType, typename... ArgTypes>
+struct RemoveArgs <ReturnType(ArgTypes...)> {
+    typedef Function<ReturnType(ArgTypes...)> type;
+};
+
+template <typename ReturnType, typename RemovedArg, typename... ArgTypes, typename ToRemove0, typename... ToRemove>
+struct RemoveArgs <ReturnType(RemovedArg, ArgTypes...), ToRemove0, ToRemove...> {
+    static_assert(std::is_same<RemovedArg, ToRemove0>::value, "Type mismatch in argument removal");
+    typedef typename RemoveArgs<ReturnType(ArgTypes...), ToRemove...>::type type;
+};
+
+
 } // namespace detail
 
 
@@ -147,15 +164,30 @@ public:
     Function(const Function & f): ref(f.ref) {
         ref && ref->inc();
     }
+    // template <typename... CapturedTypes>
+    // Function(Function<ReturnType(CapturedTypes..., ArgTypes...)> & f, CapturedTypes&&... CapturedArgs) {
+    //     typedef typename detail::CapturedArguments<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
+    //     std::tuple<CapturedTypes...> t(detail::forward<CapturedTypes>(CapturedArgs)...);
+    //     CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
+    //     new(newf) CaptureFP(t, f);
+    //     ref = newf;
+    //     ref->inc();
+    // }
     template <typename... CapturedTypes>
-    Function(Function<ReturnType(ArgTypes..., CapturedTypes...)> & f, CapturedTypes&&... CapturedArgs) {
+    Function(std::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes...,ArgTypes...)>& f) {
         typedef typename detail::CapturedArguments<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
+        static_assert(sizeof(CaptureFP) <= 40, "Size of bound arguments is too large" );
         CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
-        new(newf) CaptureFP(f, std::forward<CapturedTypes>(CapturedArgs)...);
+        new(newf) CaptureFP(t, f);
         ref = newf;
         ref->inc();
     }
-
+    template<typename... CapturedTypes>
+    typename detail::RemoveArgs<ReturnType(ArgTypes...), CapturedTypes...>::type bind(CapturedTypes... CapturedArgs) {
+        std::tuple<CapturedTypes...> t(detail::forward<CapturedTypes>(CapturedArgs)...);
+        typename detail::RemoveArgs<ReturnType(ArgTypes...), CapturedTypes...>::type f(t,*this);
+        return f;
+    }
 
     ~Function() {
         ref && ref->dec() && ref->getAllocator()->free(ref);
