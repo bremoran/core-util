@@ -32,12 +32,10 @@
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <stdarg.h>
 #include <new>
 #include <utility>
 #include <cstdio>
 #include <type_traits>
-#include <tuple>
 
 #include "core-util/ExtendablePoolAllocator.h"
 
@@ -53,73 +51,12 @@ class Function;
 #include "detail/member.hpp"
 #include "detail/functor.hpp"
 #include "detail/allocators.hpp"
+#include "detail/capture.hpp"
 
 
 namespace functional {
-
-// namespace detail {
-//
-// }
-
 namespace detail {
 
-namespace index {
-template<std::size_t ...>
-struct sequence { };
-
-template<std::size_t N, std::size_t ...S>
-struct generator : generator<N-1, N-1, S...> { };
-
-template<std::size_t ...S>
-struct generator<0, S...> {
-  typedef sequence<S...> type;
-};
-} // namespace index
-
-template <typename FunctionType, ContainerAllocator & Allocator, typename... CapturedTypes>
-class CapturedArguments;
-
-template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Allocator, typename... CapturedTypes>
-class CapturedArguments <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
-        : public FunctionInterface <ReturnType(ArgTypes...)> {
-public:
-    // CapturedArguments(Function<ReturnType(CapturedTypes..., ArgTypes...)> & f, CapturedTypes&&... CapturedArgs) :
-    //     f(f), storage(CapturedArgs...)
-    // {}
-    CapturedArguments(const std::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes..., ArgTypes...)>& f):
-        f(f), storage(t)
-    {}
-
-    virtual ReturnType operator () (ArgTypes&&... Args) {
-        return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), forward<ArgTypes>(Args)...);
-    }
-    template <size_t... S>
-    inline ReturnType idxcall(index::sequence<S...>,  ArgTypes&&... Args) {
-        return f(forward<CapturedTypes>(std::get<S>(storage))..., forward<ArgTypes>(Args)...);
-    }
-
-    virtual ContainerAllocator * getAllocator() {
-        return & Allocator;
-    }
-protected:
-
-    Function<ReturnType(CapturedTypes..., ArgTypes...)> & f;
-    std::tuple<CapturedTypes...> storage;
-};
-
-#include <type_traits>
-template <typename FunctionType, typename... ToRemove> struct RemoveArgs {};
-
-template <typename ReturnType, typename... ArgTypes>
-struct RemoveArgs <ReturnType(ArgTypes...)> {
-    typedef Function<ReturnType(ArgTypes...)> type;
-};
-
-template <typename ReturnType, typename RemovedArg, typename... ArgTypes, typename ToRemove0, typename... ToRemove>
-struct RemoveArgs <ReturnType(RemovedArg, ArgTypes...), ToRemove0, ToRemove...> {
-    static_assert(std::is_same<RemovedArg, ToRemove0>::value, "Type mismatch in argument removal");
-    typedef typename RemoveArgs<ReturnType(ArgTypes...), ToRemove...>::type type;
-};
 
 
 } // namespace detail
