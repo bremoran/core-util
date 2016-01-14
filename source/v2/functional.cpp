@@ -72,7 +72,7 @@ ContainerAllocator MemberFPAllocator(MEMBERFP_INITIAL,
     MEMBERFP_GROWBY, sizeof(MemberContainer<UnknownClass,void()>), NeverFreeTrait);
 
 ContainerAllocator FunctorFPAllocator(FUNCTORFP_INITIAL,
-    FUNCTORFP_GROWBY, sizeof(MemberContainer<UnknownClass,void()>), NeverFreeTrait);
+    FUNCTORFP_GROWBY, FUNCTOR_SIZE, NeverFreeTrait);
 
 } // namespace detail
 } // namespace functional

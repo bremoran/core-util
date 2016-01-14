@@ -36,10 +36,12 @@ void app_start(int , char **)
     f3();
     functional::Function<void(int,int,int)> f4(testprnt3);
     f4(1,2,3);
-    functional::Function<void(int,int)> f5(f4,4);
+    static_assert(std::is_same<functional::Function<void(char,int)>,
+        functional::detail::RemoveArgs<void(double,char,int),double>::type >::value, "oops");
+    functional::Function<void(int,int)> f5 = f4.bind(4);
     f5(1,2);
-    functional::Function<void(int)> f6(f4,4,5);
-    f6(1);
-    functional::Function<void()> f7(f4,4,5,6);
-    f7();
+    // functional::Function<void(int)> f6 = f4.bind(4,5);
+    // f6(1);
+    // functional::Function<void()> f7 = f4.bind(4,5,6);
+    // f7();
 }
