@@ -34,10 +34,8 @@
 #include <stddef.h>
 #include <new>
 #include <utility>
-#include <cstdio>
 #include <type_traits>
 
-#include "core-util/ExtendablePoolAllocator.h"
 
 namespace functional {
 template <typename FunctionType>
@@ -53,26 +51,11 @@ class Function;
 #include "detail/allocators.hpp"
 #include "detail/capture.hpp"
 
-
 namespace functional {
-namespace detail {
-
-
-
-} // namespace detail
-
 
 template <typename ReturnType, typename... ArgTypes>
 class Function <ReturnType(ArgTypes...)> {
 public:
-    // Function(Deleter): f(nullptr){}
-    // template <typename F>
-    // Function(const F & f) : FunctionPointer() {
-    //     F * newf = allocator(sizeof(FunctorContainer<F>))
-    //     new(newf) FunctorContainer<F>(f);
-    //     *this = newf;
-    // }
-    // template <>
     Function() : ref(nullptr) {}
     Function(ReturnType (*f)(ArgTypes...)) {
         typedef detail::StaticContainer<ReturnType(ArgTypes...)> staticFP;
@@ -80,6 +63,10 @@ public:
         new(newf) staticFP(f);
         ref = newf;
         ref->inc();
+    }
+    void attach(ReturnType (*f)(ArgTypes...)) {
+        Function<ReturnType(ArgTypes...)> func(f);
+        *this = func;
     }
     template <class C>
     Function(C *o, ReturnType (C::*fp)(ArgTypes...)) {
@@ -89,7 +76,13 @@ public:
         ref = newf;
         ref->inc();
     }
-    //TODO: use template metaprogramming to select one of three allocator pools
+    template <class C>
+    void attach(C *o, ReturnType (C::*fp)(ArgTypes...)) {
+        Function<ReturnType(ArgTypes...)> func(o,fp);
+        *this = func;
+    }
+
+    //Optimization Note: use template metaprogramming to select one of three allocator pools
     template <typename F>
     Function(const F &f) {
         typedef detail::FunctorContainer<F, ReturnType(ArgTypes...), detail::FunctorFPAllocator> FunctorFP;
@@ -98,18 +91,15 @@ public:
         ref = newf;
         ref->inc();
     }
+    template <typename F>
+    void attach(const F & f) {
+        Function<ReturnType(ArgTypes...)> func(f);
+        *this = func;
+    }
     Function(const Function & f): ref(f.ref) {
         ref && ref->inc();
     }
-    // template <typename... CapturedTypes>
-    // Function(Function<ReturnType(CapturedTypes..., ArgTypes...)> & f, CapturedTypes&&... CapturedArgs) {
-    //     typedef typename detail::CapturedArguments<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
-    //     std::tuple<CapturedTypes...> t(detail::forward<CapturedTypes>(CapturedArgs)...);
-    //     CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
-    //     new(newf) CaptureFP(t, f);
-    //     ref = newf;
-    //     ref->inc();
-    // }
+
     template <typename... CapturedTypes, typename... ParentArgTypes>
     Function(std::tuple<CapturedTypes...>& t, Function<ReturnType(ParentArgTypes...)>& f) {
         typedef typename detail::CapturedArguments<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
@@ -119,6 +109,7 @@ public:
         ref = newf;
         ref->inc();
     }
+
     template<typename... CapturedTypes>
     typename detail::RemoveArgs<ReturnType(ArgTypes...), CapturedTypes...>::type bind(CapturedTypes... CapturedArgs) {
         std::tuple<CapturedTypes...> t(detail::forward<CapturedTypes>(CapturedArgs)...);
@@ -134,25 +125,35 @@ public:
         ref = rhs.ref;
         ref && ref->inc();
     }
-    //     MemberFunctionContainer<
-    // }
-    // template <>
-    // Function(const Function<ReturnType(Args...)> & rhs) {
-    //     *this = f;
-    // }
     inline ReturnType operator () (ArgTypes&&... Args) {
         return (*ref)(detail::forward<ArgTypes>(Args)...);
     }
-    // inline bool operator == (const Function<ReturnType(Args...)> & rhs) {
-    //     return static_cast<FunctionPointer>(*this) == static_cast<FunctionPointer>(rhs);
-    // }
-    // inline Function& operator = (const Function<ReturnType(Args...)> & rhs) {
-    //     static_cast<FunctionPointer>(*this) = static_cast<FunctionPointer>(rhs);
-    //     return *this
-    // }
+    inline ReturnType call(ArgTypes&&... Args) {
+        return (*ref)(detail::forward<ArgTypes>(Args)...);
+    }
 protected:
     detail::FunctionInterface <ReturnType(ArgTypes...)> * ref;
 };
+
+namespace v0_compatibility {
+/* This namespace contains the class definitions for duck-type compatibility
+ * with v0 FunctionPointers
+ */
+
+template <typename ReturnType>
+class FunctionPointer0 : public Function<ReturnType()> {};
+
+template <typename ReturnType, typename A0>
+class FunctionPointer1 : public Function<ReturnType(A0)> {};
+
+template <typename ReturnType, typename A0, typename A1>
+class FunctionPointer2 : public Function<ReturnType(A0, A1)> {};
+
+template <typename ReturnType, typename A0, typename A1, typename A2>
+class FunctionPointer3 : public Function<ReturnType(A0, A1, A2)> {};
+
+typedef FunctionPointer0<void> FunctionPointer;
+} // namespace v0_compatibility
 
 } // namespace functional
 
