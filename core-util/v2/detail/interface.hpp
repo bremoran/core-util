@@ -33,11 +33,12 @@ class FunctionInterface <ReturnType(ArgTypes...)> {
 public:
     FunctionInterface() : refcnt(0) {}
     virtual ReturnType operator () (ArgTypes&&... Args) = 0;
-    void inc() {
+    bool inc() {
         uint32_t tmp;
         do {
             tmp = __LDREXW(&refcnt) + 1;
         } while (__STREXW(tmp, &refcnt));
+        return true;
     }
     bool dec() {
         uint32_t tmp;
