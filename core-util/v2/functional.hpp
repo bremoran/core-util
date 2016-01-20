@@ -1,5 +1,5 @@
 /* mbed Microcontroller Library
- * Copyright (c) 2006-2015 ARM Limited
+ * Copyright (c) 2006-2016 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,15 @@
 
 /**
  * \file functional.hpp
- * \brief A library that provides function containers, allocated by arbitrary allocators
+ * \brief A library that provides a ```std::function```-like interface for containing reference to callables.
  *
- * # Function
- * Function is the primary API for functional.hpp
- * Function derives from a smart pointer to a functor.
- * Function contains almost entirely inline APIs
+ * The primary API for containing and referring to callables is ```Function```. APIs in the ```detail``` namespace
+ * should not be invoked directly.
  *
- * Functor is a callable class.
- *
+ * In order to maintain compatibility with existing code, ```Function``` is intended to be duck-type compatible with
+ * the ```FunctionPointer``` family of classes, but it is intentionally not named the same way. A family of
+ * compatibility classes is provided to support conversion from ```FunctionPointer``` code to ```Function```.
+ * These compatibility classes will be deprecated in an upcoming release.
  */
 
 #include <string.h>
@@ -35,7 +35,7 @@
 #include <new>
 #include <utility>
 #include <type_traits>
-
+#include "core-util/atomic_ops.h"
 
 namespace functional {
 template <typename FunctionType>
@@ -52,11 +52,36 @@ class Function;
 #include "detail/capture.hpp"
 
 namespace functional {
-
+/**
+ * Superficially, ```Function``` is intented to appear similar to ```std::function```. However, ```Function``` has a
+ * number of key differences. ```Function``` uses reference counting to limit the copying of large callable objects,
+ * such as lambdas with large capture lists or ```Function```s with large or many arguments. ```Function``` also uses
+ * pool allocation so that objects can be created in interrupt context without using ```malloc()```. These choices are
+ * to overcome two specific limitations of ```std::function```
+ *
+ * 1. Copy-constructing a functor requires copy-constructing its member objects. In the case of lambdas, this means
+ * copy-constructing the lambda captures. lambda captures are not guaranteed to have reentrant copy constructors, so
+ * lambdas cannot be copy-constructed in interrupt context. Therefore, functors must be created in dynamic memory and
+ * only pointers to functors can be used.
+ * 2. Due to 1. creating a functor requires dynamic memory allocation, however malloc is not permitted in interrupt
+ * context. As a result functors must be pool allocated.
+ * 3. In order to simplify memory management of functors and due to 1. and 2., functors are reference-counted.
+ */
 template <typename ReturnType, typename... ArgTypes>
 class Function <ReturnType(ArgTypes...)> {
 public:
+    /**
+     * The empty constructor.
+     * Since ```Function``` only contains a single pointer, only a null assignment is necessary.
+     */
     Function() : ref(nullptr) {}
+    Function(detail::FunctionInterface<ReturnType(ArgTypes...)> *f) {
+        ref = f;
+        if (ref) {
+            ref->inc();
+        }
+    }
+
     Function(ReturnType (*f)(ArgTypes...)) {
         typedef detail::StaticContainer<ReturnType(ArgTypes...)> staticFP;
         staticFP * newf = reinterpret_cast<staticFP *>(detail::StaticFPAllocator.alloc());
@@ -82,6 +107,7 @@ public:
         *this = func;
     }
 
+
     //Optimization Note: use template metaprogramming to select one of three allocator pools
     template <typename F>
     Function(const F &f) {
@@ -97,33 +123,59 @@ public:
         *this = func;
     }
     Function(const Function & f): ref(f.ref) {
-        ref && ref->inc();
+        if(ref) {
+            ref->inc();
+        }
     }
 
     template <typename... CapturedTypes, typename... ParentArgTypes>
     Function(std::tuple<CapturedTypes...>& t, Function<ReturnType(ParentArgTypes...)>& f) {
-        typedef typename detail::CapturedArguments<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
-        static_assert(sizeof(CaptureFP) <= 40, "Size of bound arguments is too large" );
+        typedef typename detail::CaptureFirst<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
+        static_assert(sizeof(CaptureFP) <= FUNCTOR_SIZE, "Size of bound arguments is too large" );
         CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
         new(newf) CaptureFP(t, f);
         ref = newf;
         ref->inc();
     }
 
+    // Optimization note: This should be changed to use the same constructor as bind_last.
     template<typename... CapturedTypes>
-    typename detail::RemoveArgs<ReturnType(ArgTypes...), CapturedTypes...>::type bind(CapturedTypes... CapturedArgs) {
+    typename detail::RemoveFirstArgs<ReturnType(ArgTypes...), CapturedTypes...>::type bind_first(
+        CapturedTypes... CapturedArgs)
+    {
         std::tuple<CapturedTypes...> t(detail::forward<CapturedTypes>(CapturedArgs)...);
-        typename detail::RemoveArgs<ReturnType(ArgTypes...), CapturedTypes...>::type f(t,*this);
+        typename detail::RemoveFirstArgs<ReturnType(ArgTypes...), CapturedTypes...>::type f(t,*this);
         return f;
     }
 
-    ~Function() {
-        ref && ref->dec() && ref->getAllocator()->free(ref);
+    template<typename... CapturedTypes>
+    typename detail::RemoveLastArgs<ReturnType(),ReturnType(ArgTypes...),CapturedTypes...>::type bind_last(CapturedTypes... CapturedArgs)
+    {
+        using ReturnFP = typename detail::RemoveLastArgs<ReturnType(),ReturnType(ArgTypes...),CapturedTypes...>::type;
+        static_assert(std::is_same<ReturnFP, functional::Function<void(int,int)> >::value, "oops");
+        ReturnFP f(detail::bind_last(ReturnFP(), *this, detail::forward<CapturedTypes>(CapturedArgs)...));
+        return f;
     }
-    Function & operator = (const Function & rhs) {
-        ref && ref->dec() && ref->getAllocator()->free(ref);
+
+    ~Function()
+    {
+        if (ref) {
+            if (ref->dec() == 0) {
+                ref->get_allocator()->free(ref);
+            }
+        }
+    }
+    Function & operator = (const Function & rhs)
+    {
+        if (ref) {
+            if (ref->dec() == 0) {
+                ref->get_allocator()->free(ref);
+            }
+        }
         ref = rhs.ref;
-        ref && ref->inc();
+        if(ref) {
+            ref->inc();
+        }
     }
     inline ReturnType operator () (ArgTypes&&... Args) {
         return (*ref)(detail::forward<ArgTypes>(Args)...);

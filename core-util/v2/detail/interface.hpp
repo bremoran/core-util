@@ -16,7 +16,7 @@
 #ifndef FUNCTIONAL_V2_DETAIL_INTERFACE_HPP
 #define FUNCTIONAL_V2_DETAIL_INTERFACE_HPP
 
-#include "cmsis.h"
+#include "core-util/atomic_ops.h"
 namespace functional {
 namespace detail {
 template <typename FunctionType>
@@ -33,23 +33,17 @@ class FunctionInterface <ReturnType(ArgTypes...)> {
 public:
     FunctionInterface() : refcnt(0) {}
     virtual ReturnType operator () (ArgTypes&&... Args) = 0;
-    bool inc() {
-        uint32_t tmp;
-        do {
-            tmp = __LDREXW(&refcnt) + 1;
-        } while (__STREXW(tmp, &refcnt));
-        return true;
+    virtual ContainerAllocator *get_allocator() = 0;
+    inline uint32_t inc()
+    {
+        return mbed::util::atomic_incr(&refcnt, 1ul);
     }
-    bool dec() {
-        uint32_t tmp;
-        do {
-            tmp = __LDREXW(&refcnt) - 1;
-        } while (__STREXW(tmp, &refcnt));
-        return tmp == 0;
+    inline uint32_t dec()
+    {
+        return mbed::util::atomic_decr(&refcnt, 1ul);
     }
-    virtual ContainerAllocator *getAllocator() = 0;
 protected:
-    volatile uint32_t refcnt;
+    uint32_t refcnt;
 };
 
 } // namespace detail

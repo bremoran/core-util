@@ -34,7 +34,7 @@ public:
     virtual ReturnType operator () (ArgTypes&&... Args) {
         return (obj->*fp)(forward<ArgTypes>(Args)...);
     }
-    ContainerAllocator * getAllocator() {
+    ContainerAllocator * get_allocator() {
         return & MemberFPAllocator;
     }
 
