@@ -2,9 +2,11 @@
  * Copyright (c) 2015 ARM Limited
  */
 
+/*
+ * NOTE: this file should be removed prior to merge since it is not adequate as a test.
+ */
 #include <cstdio>
 #include "core-util/v2/functional.hpp"
-#include "mbed-drivers/app.h"
 
 void testprnt() {
     printf("%s\r\n", __PRETTY_FUNCTION__);
@@ -36,12 +38,12 @@ void app_start(int , char **)
     f3();
     functional::Function<void(int,int,int)> f4(testprnt3);
     f4(1,2,3);
-    static_assert(std::is_same<functional::Function<void(char,int)>,
-        functional::detail::RemoveArgs<void(double,char,int),double>::type >::value, "oops");
-    functional::Function<void(int,int)> f5 = f4.bind(4);
+    functional::Function<void(int,int)> f5 = f4.bind_first(4);
     f5(1,2);
-    functional::Function<void(int)> f6 = f4.bind(4,5);
+    functional::Function<void(int)> f6 = f4.bind_first(4,5);
     f6(1);
-    functional::Function<void()> f7 = f4.bind(4,5,6);
+    functional::Function<void()> f7 = f4.bind_first(4,5,6);
     f7();
+    functional::Function<void(int,int)> f8 = f4.bind_last(4);
+    f8(1,2);
 }

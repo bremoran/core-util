@@ -35,7 +35,7 @@ public:
     virtual ReturnType operator () (ArgTypes&&... Args) {
         return f(detail::forward<ArgTypes>(Args)...);
     }
-    virtual ContainerAllocator * getAllocator() {
+    virtual ContainerAllocator * get_allocator() {
         return &Allocator;
     }
 

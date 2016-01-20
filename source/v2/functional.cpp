@@ -53,12 +53,6 @@
 #define FUNCTORFP_GROWBY FUNCTORFP_INITIAL
 #endif
 
-#if YOTTA_CONFIG_CORE_UTIL_FUNCTIONAL_FUNCTOR_SIZE
-#define FUNCTOR_SIZE YOTTA_CONFIG_CORE_UTIL_FUNCTIONAL_FUNCTOR_SIZE
-#else
-#define FUNCTOR_SIZE (sizeof(MemberContainer<UnknownClass,void()>) + sizeof(void*) * 3)
-#endif
-
 namespace functional {
 namespace detail {
 const UAllocTraits_t NeverFreeTrait = {.flags = UALLOC_TRAITS_NEVER_FREE};

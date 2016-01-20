@@ -40,16 +40,13 @@ struct generator<0, S...> {
 } // namespace index
 
 template <typename FunctionType, ContainerAllocator & Allocator, typename... CapturedTypes>
-class CapturedArguments;
+class CaptureFirst;
 
 template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Allocator, typename... CapturedTypes>
-class CapturedArguments <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
+class CaptureFirst <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
         : public FunctionInterface <ReturnType(ArgTypes...)> {
 public:
-    // CapturedArguments(Function<ReturnType(CapturedTypes..., ArgTypes...)> & f, CapturedTypes&&... CapturedArgs) :
-    //     f(f), storage(CapturedArgs...)
-    // {}
-    CapturedArguments(const std::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes..., ArgTypes...)>& f):
+    CaptureFirst(const std::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes..., ArgTypes...)>& f):
         f(f), storage(t)
     {}
 
@@ -61,13 +58,13 @@ public:
         return f(forward<CapturedTypes>(std::get<S>(storage))..., forward<ArgTypes>(Args)...);
     }
 
-    virtual ContainerAllocator * getAllocator() {
+    virtual ContainerAllocator * get_allocator() {
         return & Allocator;
     }
 protected:
     /*
      * Future Optimization Note: It is possible to reduce memory consumption and call
-     * overhead by making CapturedArguments inherit from each of the FunctionInterface
+     * overhead by making CaptureFirst inherit from each of the FunctionInterface
      * types, rather than just from FunctionInterface.
      *
      * In this case, however, a smarter allocator would help
@@ -76,18 +73,72 @@ protected:
     std::tuple<CapturedTypes...> storage;
 };
 
-template <typename FunctionType, typename... ToRemove> struct RemoveArgs {};
+template <typename FunctionType, ContainerAllocator & Allocator, typename... CapturedTypes>
+class CaptureLast;
+
+template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Allocator, typename... CapturedTypes>
+class CaptureLast <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
+        : public FunctionInterface <ReturnType(ArgTypes...)> {
+public:
+    CaptureLast(Function<ReturnType(ArgTypes..., CapturedTypes...)> & f, CapturedTypes&&... CapturedArgs) :
+        f(f), storage(CapturedArgs...)
+    {}
+
+    virtual ReturnType operator () (ArgTypes&&... Args) {
+        return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), forward<ArgTypes>(Args)...);
+    }
+    template <size_t... S>
+    inline ReturnType idxcall(index::sequence<S...>,  ArgTypes&&... Args) {
+        return f(forward<ArgTypes>(Args)..., forward<CapturedTypes>(std::get<S>(storage))...);
+    }
+
+    virtual ContainerAllocator * get_allocator() {
+        return & Allocator;
+    }
+protected:
+
+    Function<ReturnType(ArgTypes..., CapturedTypes...)> & f;
+    std::tuple<CapturedTypes...> storage;
+};
+
+template <typename FunctionType, typename... ToRemove> struct RemoveFirstArgs {};
 
 template <typename ReturnType, typename... ArgTypes>
-struct RemoveArgs <ReturnType(ArgTypes...)> {
+struct RemoveFirstArgs <ReturnType(ArgTypes...)> {
     typedef Function<ReturnType(ArgTypes...)> type;
 };
 
 template <typename ReturnType, typename RemovedArg, typename... ArgTypes, typename ToRemove0, typename... ToRemove>
-struct RemoveArgs <ReturnType(RemovedArg, ArgTypes...), ToRemove0, ToRemove...> {
+struct RemoveFirstArgs <ReturnType(RemovedArg, ArgTypes...), ToRemove0, ToRemove...> {
     static_assert(std::is_same<RemovedArg, ToRemove0>::value, "Type mismatch in argument removal");
-    typedef typename RemoveArgs<ReturnType(ArgTypes...), ToRemove...>::type type;
+    typedef typename RemoveFirstArgs<ReturnType(ArgTypes...), ToRemove...>::type type;
 };
+
+template <typename FunctionType0, typename FunctionType1, typename... RemoveTypes> struct RemoveLastArgs;
+
+template <typename ReturnType, typename... Types, typename... RemoveTypes>
+struct RemoveLastArgs <ReturnType(Types...), ReturnType(), RemoveTypes...> {
+    using type = void;
+};
+
+template <typename ReturnType, typename... Types0, typename Transfer1, typename... Types1, typename... RemoveTypes>
+struct RemoveLastArgs <ReturnType(Types0...), ReturnType(Transfer1, Types1...), RemoveTypes...> {
+    using type = typename std::conditional<
+        std::is_same<std::tuple<Types1...>,std::tuple<RemoveTypes...> >::value,
+        Function<ReturnType(Types0..., Transfer1)>,
+        typename RemoveLastArgs<ReturnType(Types0..., Transfer1), ReturnType(Types1...), RemoveTypes...>::type
+    >::type;
+};
+
+template <typename ReturnType, typename... ArgTypes, typename... ParentTypes, typename... CapturedTypes>
+Function<ReturnType(ArgTypes...)> bind_last(Function<ReturnType(ArgTypes...)> &&, Function<ReturnType(ParentTypes...)>& f, CapturedTypes... CapturedArgs) {
+    using CaptureFP = CaptureLast<ReturnType(ArgTypes...), FunctorFPAllocator, CapturedTypes...>;
+    static_assert(sizeof(CaptureFP) <= FUNCTOR_SIZE, "Size of bound arguments is too large" );
+    CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
+    new(newf) CaptureFP(f,forward<CapturedTypes>(CapturedArgs)...);
+    return Function<ReturnType(ArgTypes...)>(static_cast<FunctionInterface<ReturnType(ArgTypes...)>*>(newf));
+}
+
 
 } // namespace detail
 } // namespace functional

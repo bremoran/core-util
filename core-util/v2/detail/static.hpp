@@ -33,7 +33,7 @@ public:
     virtual ReturnType operator () (ArgTypes&&... Args) {
         return fp(forward<ArgTypes>(Args)...);
     }
-    virtual ContainerAllocator * getAllocator() {
+    virtual ContainerAllocator * get_allocator() {
         return & StaticFPAllocator;
     }
 
