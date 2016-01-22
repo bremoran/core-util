@@ -16,7 +16,6 @@
 #ifndef FUNCTIONAL_DETAIL_CAPTURE_HPP
 #define FUNCTIONAL_DETAIL_CAPTURE_HPP
 
-#include <type_traits>
 #include <tuple>
 
 #include "interface.hpp"
@@ -50,7 +49,7 @@ public:
         f(f), storage(t)
     {}
 
-    virtual ReturnType operator () (ArgTypes&&... Args) {
+    ReturnType operator () (ArgTypes&&... Args) {
         return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), forward<ArgTypes>(Args)...);
     }
     template <size_t... S>
@@ -58,7 +57,7 @@ public:
         return f(forward<CapturedTypes>(std::get<S>(storage))..., forward<ArgTypes>(Args)...);
     }
 
-    virtual ContainerAllocator * get_allocator() {
+    ContainerAllocator * get_allocator() {
         return & Allocator;
     }
 protected:
@@ -84,7 +83,7 @@ public:
         f(f), storage(CapturedArgs...)
     {}
 
-    virtual ReturnType operator () (ArgTypes&&... Args) {
+    ReturnType operator () (ArgTypes&&... Args) {
         return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), forward<ArgTypes>(Args)...);
     }
     template <size_t... S>
@@ -92,7 +91,7 @@ public:
         return f(forward<ArgTypes>(Args)..., forward<CapturedTypes>(std::get<S>(storage))...);
     }
 
-    virtual ContainerAllocator * get_allocator() {
+    ContainerAllocator * get_allocator() {
         return & Allocator;
     }
 protected:
@@ -135,6 +134,7 @@ Function<ReturnType(ArgTypes...)> bind_last(Function<ReturnType(ArgTypes...)> &&
     using CaptureFP = CaptureLast<ReturnType(ArgTypes...), FunctorFPAllocator, CapturedTypes...>;
     static_assert(sizeof(CaptureFP) <= FUNCTOR_SIZE, "Size of bound arguments is too large" );
     CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
+    CORE_UTIL_ASSERT_MSG(newf, "Function container memory allocation failed");
     new(newf) CaptureFP(f,forward<CapturedTypes>(CapturedArgs)...);
     return Function<ReturnType(ArgTypes...)>(static_cast<FunctionInterface<ReturnType(ArgTypes...)>*>(newf));
 }

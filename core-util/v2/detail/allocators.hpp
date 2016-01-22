@@ -27,6 +27,7 @@ class ContainerAllocator : public mbed::util::ExtendablePoolAllocator {
 public:
     ContainerAllocator(size_t initial_elements, size_t new_pool_elements, size_t element_size,
         UAllocTraits_t alloc_traits, unsigned alignment = MBED_UTIL_POOL_ALLOC_DEFAULT_ALIGN)
+    : mbed::util::ExtendablePoolAllocator()
     {
         this->init(initial_elements, new_pool_elements, element_size, alloc_traits, alignment);
     }
