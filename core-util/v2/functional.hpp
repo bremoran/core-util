@@ -34,7 +34,6 @@
 #include <stddef.h>
 #include <new>
 #include <utility>
-#include <type_traits>
 #include "core-util/atomic_ops.h"
 
 namespace functional {
@@ -75,16 +74,31 @@ public:
      * Since ```Function``` only contains a single pointer, only a null assignment is necessary.
      */
     Function() : ref(nullptr) {}
+    /**
+     * Construct a Function from a FunctionInterface.
+     *
+     * This is an API that should only be used by Function and its helpers. It was specifically added to enable
+     * bind_first and bind_last.
+     *
+     * @param[in] f
+     */
     Function(detail::FunctionInterface<ReturnType(ArgTypes...)> *f) {
         ref = f;
         if (ref) {
             ref->inc();
         }
     }
+    /**
+     * Move constructor
+     * This constructor steals the reference from the rvalue-reference Function
+     * without incrementing the reference count.
+     */
+    Function(Function &&f): ref(f.ref) {}
 
     Function(ReturnType (*f)(ArgTypes...)) {
         typedef detail::StaticContainer<ReturnType(ArgTypes...)> staticFP;
         staticFP * newf = reinterpret_cast<staticFP *>(detail::StaticFPAllocator.alloc());
+        CORE_UTIL_ASSERT_MSG(newf, "Function container memory allocation failed");
         new(newf) staticFP(f);
         ref = newf;
         ref->inc();
@@ -97,6 +111,7 @@ public:
     Function(C *o, ReturnType (C::*fp)(ArgTypes...)) {
         typedef detail::MemberContainer<C, ReturnType(ArgTypes...)> memberFP;
         memberFP * newf = reinterpret_cast<memberFP *>(detail::MemberFPAllocator.alloc());
+        CORE_UTIL_ASSERT_MSG(newf, "Function container memory allocation failed");
         new(newf) memberFP(o, fp);
         ref = newf;
         ref->inc();
@@ -113,6 +128,7 @@ public:
     Function(const F &f) {
         typedef detail::FunctorContainer<F, ReturnType(ArgTypes...), detail::FunctorFPAllocator> FunctorFP;
         FunctorFP * newf = reinterpret_cast<FunctorFP *>(detail::FunctorFPAllocator.alloc());
+        CORE_UTIL_ASSERT_MSG(newf, "Function container memory allocation failed");
         new(newf) FunctorFP(f);
         ref = newf;
         ref->inc();
@@ -133,6 +149,7 @@ public:
         typedef typename detail::CaptureFirst<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
         static_assert(sizeof(CaptureFP) <= FUNCTOR_SIZE, "Size of bound arguments is too large" );
         CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
+        CORE_UTIL_ASSERT_MSG(newf, "Function container memory allocation failed");
         new(newf) CaptureFP(t, f);
         ref = newf;
         ref->inc();
