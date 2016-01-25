@@ -35,6 +35,7 @@
 #include <new>
 #include <utility>
 #include "core-util/atomic_ops.h"
+#include "core-util/assert.h"
 
 namespace functional {
 template <typename FunctionType>
@@ -200,6 +201,41 @@ public:
     inline ReturnType call(ArgTypes&&... Args) {
         return (*ref)(detail::forward<ArgTypes>(Args)...);
     }
+    void * get_ref() {
+        if (ref)
+            ref->inc();
+        return reinterpret_cast<void *>(ref);
+    }
+    /* Note that this function does not use rvalue references beceause it is for C API interoperability */
+    static ReturnType call_from_void(void *vref, ArgTypes... Args) {
+        detail::FunctionInterface<ReturnType(ArgTypes...)> * sref =
+            reinterpret_cast<detail::FunctionInterface<ReturnType(ArgTypes...)> *>(vref);
+        CORE_UTIL_ASSERT_MSG(sref != NULL, "Cannot call a null Function object");
+        return (*sref)(Args...);
+    }
+    static ReturnType call_from_void_rref(void *vref, ArgTypes&&... Args) {
+        detail::FunctionInterface<ReturnType(ArgTypes...)> * sref =
+            reinterpret_cast<detail::FunctionInterface<ReturnType(ArgTypes...)> *>(vref);
+        CORE_UTIL_ASSERT_MSG(sref != NULL, "Cannot call a null Function object");
+        return (*sref)(detail::forward<ArgTypes>(Args)...);
+    }
+    static ReturnType call_from_void_dec(void *vref, ArgTypes... Args) {
+        detail::FunctionInterface<ReturnType(ArgTypes...)> * sref =
+            reinterpret_cast<detail::FunctionInterface<ReturnType(ArgTypes...)> *>(vref);
+        CORE_UTIL_ASSERT_MSG(sref != NULL, "Cannot call a null Function object");
+        ReturnType r((*sref)(Args...));
+        sref->dec();
+        return r;
+    }
+    static ReturnType call_from_void_dec_rref(void *vref, ArgTypes&&... Args) {
+        detail::FunctionInterface<ReturnType(ArgTypes...)> * sref =
+            reinterpret_cast<detail::FunctionInterface<ReturnType(ArgTypes...)> *>(vref);
+        CORE_UTIL_ASSERT_MSG(sref != NULL, "Cannot call a null Function object");
+        ReturnType r((*sref)(detail::forward<ArgTypes>(Args)...));
+        sref->dec();
+        return r;
+    }
+
 protected:
     detail::FunctionInterface <ReturnType(ArgTypes...)> * ref;
 };
