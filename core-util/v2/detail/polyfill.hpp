@@ -80,18 +80,18 @@ template <class Condition, typename T = void>
 struct enable_if_c : public enable_if_impl<Condition::value, T> {};
 
 template <typename T0, typename T1>
-struct size_gt {
-    static constexpr bool value = sizeof(T0) > sizeof(T1);
+struct align_gt {
+    static constexpr bool value = __alignof__(T0) > __alignof__(T1);
 };
 template <typename T0, typename T1>
-struct size_le {
-    static constexpr bool value = sizeof(T0) <= sizeof(T1);
+struct align_le {
+    static constexpr bool value = __alignof__(T0) <= __alignof__(T1);
 };
 
 template <typename T0, typename T1, typename T = void>
-struct enable_if_size_gt : enable_if<size_gt<T0,T1>::value, T> {};
+struct enable_if_align_gt : enable_if<align_gt<T0,T1>::value, T> {};
 template <typename T0, typename T1, typename T = void>
-struct enable_if_size_le : enable_if<size_le<T0,T1>::value, T> {};
+struct enable_if_align_le : enable_if<align_le<T0,T1>::value, T> {};
 
 
 
@@ -120,7 +120,7 @@ struct tuple_impl<void, T0> {
 };
 
 template <typename T0, typename T1, typename... T>
-struct tuple_impl<typename enable_if_size_gt<T0, T1>::type, T0, T1, T...> {
+struct tuple_impl<typename enable_if_align_gt<T0, T1>::type, T0, T1, T...> {
     T0 t0;
     tuple_impl<void, T1, T...> t;
 
@@ -137,7 +137,7 @@ struct tuple_impl<typename enable_if_size_gt<T0, T1>::type, T0, T1, T...> {
 };
 
 template <typename T0, typename T1, typename... T>
-struct tuple_impl<typename enable_if_size_le<T0, T1>::type, T0, T1, T...> {
+struct tuple_impl<typename enable_if_align_le<T0, T1>::type, T0, T1, T...> {
     tuple_impl<void, T1, T...> t;
     T0 t0;
 
