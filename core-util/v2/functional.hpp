@@ -43,7 +43,7 @@ class Function;
 
 } // namespace functional
 
-#include "detail/forward.hpp"
+#include "detail/polyfill.hpp"
 #include "detail/interface.hpp"
 #include "detail/static.hpp"
 #include "detail/member.hpp"
@@ -146,7 +146,7 @@ public:
     }
 
     template <typename... CapturedTypes, typename... ParentArgTypes>
-    Function(std::tuple<CapturedTypes...>& t, Function<ReturnType(ParentArgTypes...)>& f) {
+    Function(polyfill::tuple<CapturedTypes...>& t, Function<ReturnType(ParentArgTypes...)>& f) {
         typedef typename detail::CaptureFirst<ReturnType(ArgTypes...), detail::FunctorFPAllocator, CapturedTypes...> CaptureFP;
         static_assert(sizeof(CaptureFP) <= FUNCTOR_SIZE, "Size of bound arguments is too large" );
         CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
@@ -161,7 +161,7 @@ public:
     typename detail::RemoveFirstArgs<ReturnType(ArgTypes...), CapturedTypes...>::type bind_first(
         CapturedTypes... CapturedArgs)
     {
-        std::tuple<CapturedTypes...> t(detail::forward<CapturedTypes>(CapturedArgs)...);
+        polyfill::tuple<CapturedTypes...> t(polyfill::forward<CapturedTypes>(CapturedArgs)...);
         typename detail::RemoveFirstArgs<ReturnType(ArgTypes...), CapturedTypes...>::type f(t,*this);
         return f;
     }
@@ -171,7 +171,7 @@ public:
     {
         using ReturnFP = typename detail::RemoveLastArgs<ReturnType(),ReturnType(ArgTypes...),CapturedTypes...>::type;
         static_assert(std::is_same<ReturnFP, functional::Function<void(int,int)> >::value, "oops");
-        ReturnFP f(detail::bind_last(ReturnFP(), *this, detail::forward<CapturedTypes>(CapturedArgs)...));
+        ReturnFP f(detail::bind_last(ReturnFP(), *this, polyfill::forward<CapturedTypes>(CapturedArgs)...));
         return f;
     }
 
@@ -196,10 +196,10 @@ public:
         }
     }
     inline ReturnType operator () (ArgTypes&&... Args) {
-        return (*ref)(detail::forward<ArgTypes>(Args)...);
+        return (*ref)(polyfill::forward<ArgTypes>(Args)...);
     }
     inline ReturnType call(ArgTypes&&... Args) {
-        return (*ref)(detail::forward<ArgTypes>(Args)...);
+        return (*ref)(polyfill::forward<ArgTypes>(Args)...);
     }
     void * get_ref() {
         if (ref)
@@ -217,7 +217,7 @@ public:
         detail::FunctionInterface<ReturnType(ArgTypes...)> * sref =
             reinterpret_cast<detail::FunctionInterface<ReturnType(ArgTypes...)> *>(vref);
         CORE_UTIL_ASSERT_MSG(sref != NULL, "Cannot call a null Function object");
-        return (*sref)(detail::forward<ArgTypes>(Args)...);
+        return (*sref)(polyfill::forward<ArgTypes>(Args)...);
     }
     static ReturnType call_from_void_dec(void *vref, ArgTypes... Args) {
         detail::FunctionInterface<ReturnType(ArgTypes...)> * sref =
@@ -231,7 +231,7 @@ public:
         detail::FunctionInterface<ReturnType(ArgTypes...)> * sref =
             reinterpret_cast<detail::FunctionInterface<ReturnType(ArgTypes...)> *>(vref);
         CORE_UTIL_ASSERT_MSG(sref != NULL, "Cannot call a null Function object");
-        ReturnType r((*sref)(detail::forward<ArgTypes>(Args)...));
+        ReturnType r((*sref)(polyfill::forward<ArgTypes>(Args)...));
         sref->dec();
         return r;
     }

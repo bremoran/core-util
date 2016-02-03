@@ -16,7 +16,7 @@
 #ifndef FUNCTIONAL_DETAIL_CAPTURE_HPP
 #define FUNCTIONAL_DETAIL_CAPTURE_HPP
 
-#include <tuple>
+#include "polyfill.hpp"
 
 #include "interface.hpp"
 #include "allocators.hpp"
@@ -45,16 +45,16 @@ template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Alloca
 class CaptureFirst <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
         : public FunctionInterface <ReturnType(ArgTypes...)> {
 public:
-    CaptureFirst(const std::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes..., ArgTypes...)>& f):
+    CaptureFirst(const polyfill::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes..., ArgTypes...)>& f):
         f(f), storage(t)
     {}
 
     ReturnType operator () (ArgTypes&&... Args) {
-        return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), forward<ArgTypes>(Args)...);
+        return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), polyfill::forward<ArgTypes>(Args)...);
     }
     template <size_t... S>
     inline ReturnType idxcall(index::sequence<S...>,  ArgTypes&&... Args) {
-        return f(forward<CapturedTypes>(std::get<S>(storage))..., forward<ArgTypes>(Args)...);
+        return f(polyfill::forward<CapturedTypes>(polyfill::get<S>(storage))..., polyfill::forward<ArgTypes>(Args)...);
     }
 
     ContainerAllocator * get_allocator() {
@@ -69,7 +69,7 @@ protected:
      * In this case, however, a smarter allocator would help
      */
     Function<ReturnType(CapturedTypes..., ArgTypes...)> & f;
-    std::tuple<CapturedTypes...> storage;
+    polyfill::tuple<CapturedTypes...> storage;
 };
 
 template <typename FunctionType, ContainerAllocator & Allocator, typename... CapturedTypes>
@@ -84,11 +84,11 @@ public:
     {}
 
     ReturnType operator () (ArgTypes&&... Args) {
-        return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), forward<ArgTypes>(Args)...);
+        return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), polyfill::forward<ArgTypes>(Args)...);
     }
     template <size_t... S>
     inline ReturnType idxcall(index::sequence<S...>,  ArgTypes&&... Args) {
-        return f(forward<ArgTypes>(Args)..., forward<CapturedTypes>(std::get<S>(storage))...);
+        return f(polyfill::forward<ArgTypes>(Args)..., polyfill::forward<CapturedTypes>(polyfill::get<S>(storage))...);
     }
 
     ContainerAllocator * get_allocator() {
@@ -97,7 +97,7 @@ public:
 protected:
 
     Function<ReturnType(ArgTypes..., CapturedTypes...)> & f;
-    std::tuple<CapturedTypes...> storage;
+    polyfill::tuple<CapturedTypes...> storage;
 };
 
 template <typename FunctionType, typename... ToRemove> struct RemoveFirstArgs {};
@@ -123,7 +123,7 @@ struct RemoveLastArgs <ReturnType(Types...), ReturnType(), RemoveTypes...> {
 template <typename ReturnType, typename... Types0, typename Transfer1, typename... Types1, typename... RemoveTypes>
 struct RemoveLastArgs <ReturnType(Types0...), ReturnType(Transfer1, Types1...), RemoveTypes...> {
     using type = typename std::conditional<
-        std::is_same<std::tuple<Types1...>,std::tuple<RemoveTypes...> >::value,
+        std::is_same<polyfill::tuple<Types1...>,polyfill::tuple<RemoveTypes...> >::value,
         Function<ReturnType(Types0..., Transfer1)>,
         typename RemoveLastArgs<ReturnType(Types0..., Transfer1), ReturnType(Types1...), RemoveTypes...>::type
     >::type;
@@ -135,7 +135,7 @@ Function<ReturnType(ArgTypes...)> bind_last(Function<ReturnType(ArgTypes...)> &&
     static_assert(sizeof(CaptureFP) <= FUNCTOR_SIZE, "Size of bound arguments is too large" );
     CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
     CORE_UTIL_ASSERT_MSG(newf, "Function container memory allocation failed");
-    new(newf) CaptureFP(f,forward<CapturedTypes>(CapturedArgs)...);
+    new(newf) CaptureFP(f,polyfill::forward<CapturedTypes>(CapturedArgs)...);
     return Function<ReturnType(ArgTypes...)>(static_cast<FunctionInterface<ReturnType(ArgTypes...)>*>(newf));
 }
 
