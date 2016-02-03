@@ -45,19 +45,24 @@ template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Alloca
 class CaptureFirst <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
         : public FunctionInterface <ReturnType(ArgTypes...)> {
 public:
-    CaptureFirst(const polyfill::tuple<CapturedTypes...>& t, Function<ReturnType(CapturedTypes..., ArgTypes...)>& f):
+    using stype = polyfill::tuple<CapturedTypes...>;
+    CaptureFirst(const stype & t, Function<ReturnType(CapturedTypes..., ArgTypes...)>& f):
         f(f), storage(t)
     {}
 
-    ReturnType operator () (ArgTypes&&... Args) {
+    virtual ReturnType operator () (ArgTypes&&... Args) {
         return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), polyfill::forward<ArgTypes>(Args)...);
     }
     template <size_t... S>
     inline ReturnType idxcall(index::sequence<S...>,  ArgTypes&&... Args) {
-        return f(polyfill::forward<CapturedTypes>(polyfill::get<S>(storage))..., polyfill::forward<ArgTypes>(Args)...);
+        return f(
+            polyfill::forward<CapturedTypes>(
+                polyfill::get<S,CapturedTypes...>(storage)
+            )..., 
+            polyfill::forward<ArgTypes>(Args)...);
     }
 
-    ContainerAllocator * get_allocator() {
+    virtual ContainerAllocator * get_allocator() {
         return & Allocator;
     }
 protected:
@@ -83,15 +88,15 @@ public:
         f(f), storage(CapturedArgs...)
     {}
 
-    ReturnType operator () (ArgTypes&&... Args) {
+    virtual ReturnType operator () (ArgTypes&&... Args) {
         return idxcall(typename index::generator<sizeof...(CapturedTypes)>::type(), polyfill::forward<ArgTypes>(Args)...);
     }
     template <size_t... S>
     inline ReturnType idxcall(index::sequence<S...>,  ArgTypes&&... Args) {
-        return f(polyfill::forward<ArgTypes>(Args)..., polyfill::forward<CapturedTypes>(polyfill::get<S>(storage))...);
+        return f(polyfill::forward<ArgTypes>(Args)..., polyfill::forward<CapturedTypes>(polyfill::get<S,CapturedTypes...>(storage))...);
     }
 
-    ContainerAllocator * get_allocator() {
+    virtual ContainerAllocator * get_allocator() {
         return & Allocator;
     }
 protected:
