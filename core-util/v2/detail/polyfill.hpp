@@ -17,16 +17,53 @@
 #define CORE_UTIL_V2_DETAIL_POLYFILL_HPP
 
 namespace polyfill {
+template< class T > struct remove_reference      {typedef T type;};
+template< class T > struct remove_reference<T&>  {typedef T type;};
+template< class T > struct remove_reference<T&&> {typedef T type;};
+
 template<class T>
-T&& forward(typename std::remove_reference<T>::type& a) noexcept
+typename remove_reference<T>::type&&
+move(T&& a) noexcept
+{
+	typedef typename remove_reference<T>::type&& RvalRef;
+	return static_cast<RvalRef>(a);
+}
+template<class T>
+T&&
+forward(typename remove_reference<T>::type& a) noexcept
+{
+	return static_cast<T&&>(a);
+}
+template<class T>
+T&&
+forward(typename remove_reference<T>::type&& a) noexcept
 {
     return static_cast<T&&>(a);
 }
-template<class T>
-T&& forward(typename std::remove_reference<T>::type&& a) noexcept
-{
-    return static_cast<T&&>(a);
-}
+
+template <typename T0, typename T1>
+struct is_same {
+    static constexpr bool value = false;
+};
+
+template <typename T>
+struct is_same<T,T> {
+    static constexpr bool value = true;
+};
+
+template <bool B, typename T0, typename T1>
+struct conditional;
+
+template <typename T0, typename T1>
+struct conditional<true, T0, T1> {
+    using type = T0;
+};
+
+template <typename T0, typename T1>
+struct conditional<false, T0, T1> {
+    using type = T1;
+};
+
 
 template <bool, typename T = void>
 struct enable_if_impl {};
