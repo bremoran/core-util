@@ -36,11 +36,11 @@ public:
     virtual ContainerAllocator *get_allocator() = 0;
     inline uint32_t inc()
     {
-        return mbed::util::atomic_incr(&refcnt, 1ul);
+        return mbed::util::atomic_incr(&refcnt, static_cast<uint32_t>(1));
     }
     inline uint32_t dec()
     {
-        return mbed::util::atomic_decr(&refcnt, 1ul);
+        return mbed::util::atomic_decr(&refcnt, static_cast<uint32_t>(1));
     }
 protected:
     uint32_t refcnt;

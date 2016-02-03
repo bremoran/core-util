@@ -9,16 +9,16 @@
 #include "core-util/v2/functional.hpp"
 
 void testprnt() {
-    printf("%s\r\n", __PRETTY_FUNCTION__);
+    std::printf("%s\r\n", __PRETTY_FUNCTION__);
 }
 void testprnt3(int i, int j, int k) {
-    printf("%s(%i, %i, %i)\r\n", __PRETTY_FUNCTION__, i, j, k);
+    std::printf("%s(%i, %i, %i)\r\n", __PRETTY_FUNCTION__, i, j, k);
 }
 
 class foo {
 public:
     void testprnt() {
-        printf("%s\r\n", __PRETTY_FUNCTION__);
+        std::printf("%s\r\n", __PRETTY_FUNCTION__);
     }
 };
 
@@ -32,7 +32,7 @@ void app_start(int , char **)
     int i = 1;
     functional::Function<void()> f3(
         [i]() {
-            printf("%s(%i)\r\n", __PRETTY_FUNCTION__, i);
+            std::printf("%s(%i)\r\n", __PRETTY_FUNCTION__, i);
         }
     );
     f3();

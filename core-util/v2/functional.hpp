@@ -170,7 +170,6 @@ public:
     typename detail::RemoveLastArgs<ReturnType(),ReturnType(ArgTypes...),CapturedTypes...>::type bind_last(CapturedTypes... CapturedArgs)
     {
         using ReturnFP = typename detail::RemoveLastArgs<ReturnType(),ReturnType(ArgTypes...),CapturedTypes...>::type;
-        static_assert(std::is_same<ReturnFP, functional::Function<void(int,int)> >::value, "oops");
         ReturnFP f(detail::bind_last(ReturnFP(), *this, polyfill::forward<CapturedTypes>(CapturedArgs)...));
         return f;
     }

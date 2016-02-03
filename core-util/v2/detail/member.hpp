@@ -35,7 +35,7 @@ public:
     virtual ReturnType operator () (ArgTypes&&... Args) {
         return (obj->*fp)(polyfill::forward<ArgTypes>(Args)...);
     }
-    ContainerAllocator * get_allocator() {
+    virtual ContainerAllocator * get_allocator() {
         return & MemberFPAllocator;
     }
 
