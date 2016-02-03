@@ -33,7 +33,7 @@ public:
     FunctorContainer(const FunctorContainer & f) : f(f.f) {}
 
     virtual ReturnType operator () (ArgTypes&&... Args) {
-        return f(detail::forward<ArgTypes>(Args)...);
+        return f(polyfill::forward<ArgTypes>(Args)...);
     }
     virtual ContainerAllocator * get_allocator() {
         return &Allocator;

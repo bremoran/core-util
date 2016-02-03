@@ -18,6 +18,7 @@
 
 #include "interface.hpp"
 #include "allocators.hpp"
+#include "polyfill.hpp"
 
 namespace functional {
 namespace detail {
@@ -31,7 +32,7 @@ public:
     StaticContainer() : fp (nullptr) {}
     StaticContainer(staticFPType fp) : fp (fp) {}
     virtual ReturnType operator () (ArgTypes&&... Args) {
-        return fp(forward<ArgTypes>(Args)...);
+        return fp(polyfill::forward<ArgTypes>(Args)...);
     }
     virtual ContainerAllocator * get_allocator() {
         return & StaticFPAllocator;

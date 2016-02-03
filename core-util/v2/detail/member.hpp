@@ -18,6 +18,7 @@
 
 #include "interface.hpp"
 #include "allocators.hpp"
+#include "polyfill.hpp"
 
 namespace functional {
 namespace detail {
@@ -32,7 +33,7 @@ public:
     MemberContainer() : obj(nullptr), fp (nullptr) {}
     MemberContainer(C * obj, MemberFPType fp) : obj(obj), fp(fp) {}
     virtual ReturnType operator () (ArgTypes&&... Args) {
-        return (obj->*fp)(forward<ArgTypes>(Args)...);
+        return (obj->*fp)(polyfill::forward<ArgTypes>(Args)...);
     }
     ContainerAllocator * get_allocator() {
         return & MemberFPAllocator;
