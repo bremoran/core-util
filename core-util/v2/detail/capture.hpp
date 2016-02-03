@@ -109,7 +109,7 @@ struct RemoveFirstArgs <ReturnType(ArgTypes...)> {
 
 template <typename ReturnType, typename RemovedArg, typename... ArgTypes, typename ToRemove0, typename... ToRemove>
 struct RemoveFirstArgs <ReturnType(RemovedArg, ArgTypes...), ToRemove0, ToRemove...> {
-    static_assert(std::is_same<RemovedArg, ToRemove0>::value, "Type mismatch in argument removal");
+    static_assert(polyfill::is_same<RemovedArg, ToRemove0>::value, "Type mismatch in argument removal");
     typedef typename RemoveFirstArgs<ReturnType(ArgTypes...), ToRemove...>::type type;
 };
 
@@ -122,8 +122,8 @@ struct RemoveLastArgs <ReturnType(Types...), ReturnType(), RemoveTypes...> {
 
 template <typename ReturnType, typename... Types0, typename Transfer1, typename... Types1, typename... RemoveTypes>
 struct RemoveLastArgs <ReturnType(Types0...), ReturnType(Transfer1, Types1...), RemoveTypes...> {
-    using type = typename std::conditional<
-        std::is_same<polyfill::tuple<Types1...>,polyfill::tuple<RemoveTypes...> >::value,
+    using type = typename polyfill::conditional<
+        polyfill::is_same<polyfill::tuple<Types1...>,polyfill::tuple<RemoveTypes...> >::value,
         Function<ReturnType(Types0..., Transfer1)>,
         typename RemoveLastArgs<ReturnType(Types0..., Transfer1), ReturnType(Types1...), RemoveTypes...>::type
     >::type;
