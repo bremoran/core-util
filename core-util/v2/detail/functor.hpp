@@ -23,10 +23,10 @@ namespace functional {
 namespace detail {
 
 
-template <typename F, typename FunctionType, ContainerAllocator & Allocator>
+template <typename F, typename FunctionType, ContainerAllocator & (*Allocator)()>
 class FunctorContainer;
 
-template <typename F, typename ReturnType, typename... ArgTypes, ContainerAllocator & Allocator>
+template <typename F, typename ReturnType, typename... ArgTypes, ContainerAllocator & (*Allocator)()>
 class FunctorContainer <F, ReturnType(ArgTypes...), Allocator> : public FunctionInterface  <ReturnType(ArgTypes...)> {
 public:
     FunctorContainer(const F & f) : f(f) {}
@@ -35,15 +35,9 @@ public:
     virtual ReturnType operator () (ArgTypes&&... Args) {
         return f(polyfill::forward<ArgTypes>(Args)...);
     }
-    virtual ContainerAllocator * get_allocator() {
-        return &Allocator;
+    virtual ContainerAllocator & get_allocator() {
+        return Allocator();
     }
-
-    // virtual void deallocate(FunctionInterface<ReturnType(ArgTypes...)> *ptr){
-    //     (void)ptr;
-    //     this->~FunctionInterface();
-    //     Allocator.free(this);
-    // }
 protected:
     F f;
 };

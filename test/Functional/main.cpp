@@ -24,6 +24,7 @@ public:
 
 void app_start(int , char **)
 {
+    get_stdio_serial().baud(115200);
     functional::Function<void(void)> f(testprnt);
     f();
     foo o;
@@ -46,4 +47,11 @@ void app_start(int , char **)
     f7();
     functional::Function<void(int,int)> f8 = f4.bind_last(4);
     f8(1,2);
+
+    struct s0 { char c; int i;};
+    struct s1 { int i; char c;};
+
+    std::printf("alignof(struct {char, int}) = %u\r\n", __alignof__(struct s0));
+    std::printf("alignof(struct {int, char}) = %u\r\n", __alignof__(struct s1));
+
 }

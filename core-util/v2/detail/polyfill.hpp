@@ -17,6 +17,8 @@
 #define CORE_UTIL_V2_DETAIL_POLYFILL_HPP
 
 namespace polyfill {
+// From ARM Compiler armcc User Guide {
+// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0472k/chr1407404265784.html
 template< class T > struct remove_reference      {typedef T type;};
 template< class T > struct remove_reference<T&>  {typedef T type;};
 template< class T > struct remove_reference<T&&> {typedef T type;};
@@ -34,6 +36,9 @@ forward(typename remove_reference<T>::type& a) noexcept
 {
 	return static_cast<T&&>(a);
 }
+/// } From ARM Compiler armcc User Guide
+
+
 template<class T>
 T&&
 forward(typename remove_reference<T>::type&& a) noexcept
@@ -64,7 +69,6 @@ struct conditional<false, T0, T1> {
     using type = T1;
 };
 
-
 template <bool, typename T = void>
 struct enable_if_impl {};
 
@@ -75,9 +79,6 @@ struct enable_if_impl<true, T> {
 
 template <bool B, typename T = void>
 struct enable_if : public enable_if_impl<B, T> {};
-
-template <class Condition, typename T = void>
-struct enable_if_c : public enable_if_impl<Condition::value, T> {};
 
 template <typename T0, typename T1>
 struct align_gt {
@@ -95,7 +96,7 @@ struct enable_if_align_le : enable_if<align_le<T0,T1>::value, T> {};
 
 
 
-template <size_t I, typename T0, typename... T>
+template <unsigned I, typename T0, typename... T>
 struct tuple_element {
     using type = typename tuple_element<I-1,T...>::type;
 };
@@ -105,62 +106,46 @@ struct tuple_element<0,T0,T...> {
     using type = T0;
 };
 
-template <typename Enable, typename... T>
+template <typename... T>
 struct tuple_impl;
 
 template <typename T0>
-struct tuple_impl<void, T0> {
+struct tuple_impl<T0> {
     T0 t0;
     tuple_impl(const T0 &t0) : t0(forward<const T0 &>(t0)) {}
-    template <size_t I>
+    template <unsigned I>
     typename tuple_element<I,T0>::type & get() {
         static_assert(I == 0, "tuple range exceeded");
         return t0;
     }
 };
 
-template <typename T0, typename T1, typename... T>
-struct tuple_impl<typename enable_if_align_gt<T0, T1>::type, T0, T1, T...> {
+template <typename T0, typename... T>
+struct tuple_impl<T0, T...> {
     T0 t0;
-    tuple_impl<void, T1, T...> t;
+    tuple_impl<T...> t;
 
-    tuple_impl(const T0 &t0, const T1 &t1, const T&... t) :
-        t0(forward<const T0 &>(t0)), t(forward<const T1 &>(t1), forward<const T &>(t)...) {}
-    template <size_t I>
-    typename enable_if<I != 0, typename tuple_element<I,T0,T1,T...>::type>::type & get() {
+    tuple_impl(const T0 &t0, const T&... t) :
+        t0(forward<const T0 &>(t0)), t(forward<const T &>(t)...) {}
+    template <unsigned I>
+    typename enable_if<I != 0, typename tuple_element<I, T0, T...>::type>::type & get() {
         return t.get<I-1>();
     }
-    template <size_t I>
-    typename enable_if<I == 0, typename tuple_element<I,T0,T1,T...>::type>::type & get() {
+    template <unsigned I>
+    typename enable_if<I == 0, typename tuple_element<I, T0, T...>::type>::type & get() {
         return t0;
     }
 };
 
-template <typename T0, typename T1, typename... T>
-struct tuple_impl<typename enable_if_align_le<T0, T1>::type, T0, T1, T...> {
-    tuple_impl<void, T1, T...> t;
-    T0 t0;
-
-    tuple_impl(const T0 &t0, const T1 &t1, const T&... t) :
-        t(forward<const T1 &>(t1), forward<const T &>(t)...), t0(forward<const T0 &>(t0)) {}
-    template <size_t I>
-    typename enable_if<I != 0, typename tuple_element<I,T0,T1,T...>::type>::type & get() {
-        return t.get<I-1>();
-    }
-    template <size_t I>
-    typename enable_if<I == 0, typename tuple_element<I,T0,T1,T...>::type>::type & get() {
-        return t0;
-    }
-};
 
 
 template <typename... T>
-struct tuple : public tuple_impl<void, T...> {
-    tuple(const T&... t) : tuple_impl<void, T...>(forward<const T &>(t)...) {}
+struct tuple : public tuple_impl<T...> {
+    tuple(const T&... t) : tuple_impl<T...>(forward<const T &>(t)...) {}
     tuple(){}
 };
 
-template <size_t I, typename... T>
+template <unsigned I, typename... T>
 constexpr typename tuple_element<I, T...>::type & get(tuple<T...> & t) {
     return t.get<I>();
 }

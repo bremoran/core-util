@@ -21,6 +21,8 @@
 #include "interface.hpp"
 #include "allocators.hpp"
 
+#include "core-util/assert.h"
+
 namespace functional {
 namespace detail {
 
@@ -38,10 +40,10 @@ struct generator<0, S...> {
 };
 } // namespace index
 
-template <typename FunctionType, ContainerAllocator & Allocator, typename... CapturedTypes>
+template <typename FunctionType, ContainerAllocator & (*Allocator)(), typename... CapturedTypes>
 class CaptureFirst;
 
-template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Allocator, typename... CapturedTypes>
+template <typename ReturnType, typename... ArgTypes, ContainerAllocator & (*Allocator)(), typename... CapturedTypes>
 class CaptureFirst <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
         : public FunctionInterface <ReturnType(ArgTypes...)> {
 public:
@@ -58,12 +60,12 @@ public:
         return f(
             polyfill::forward<CapturedTypes>(
                 polyfill::get<S,CapturedTypes...>(storage)
-            )..., 
+            )...,
             polyfill::forward<ArgTypes>(Args)...);
     }
 
-    virtual ContainerAllocator * get_allocator() {
-        return & Allocator;
+    virtual ContainerAllocator & get_allocator() {
+        return Allocator();
     }
 protected:
     /*
@@ -77,10 +79,10 @@ protected:
     polyfill::tuple<CapturedTypes...> storage;
 };
 
-template <typename FunctionType, ContainerAllocator & Allocator, typename... CapturedTypes>
+template <typename FunctionType, ContainerAllocator & (*Allocator)(), typename... CapturedTypes>
 class CaptureLast;
 
-template <typename ReturnType, typename... ArgTypes, ContainerAllocator & Allocator, typename... CapturedTypes>
+template <typename ReturnType, typename... ArgTypes, ContainerAllocator & (*Allocator)(), typename... CapturedTypes>
 class CaptureLast <ReturnType(ArgTypes...), Allocator, CapturedTypes...>
         : public FunctionInterface <ReturnType(ArgTypes...)> {
 public:
@@ -96,8 +98,8 @@ public:
         return f(polyfill::forward<ArgTypes>(Args)..., polyfill::forward<CapturedTypes>(polyfill::get<S,CapturedTypes...>(storage))...);
     }
 
-    virtual ContainerAllocator * get_allocator() {
-        return & Allocator;
+    virtual ContainerAllocator & get_allocator() {
+        return Allocator();
     }
 protected:
 
@@ -136,9 +138,9 @@ struct RemoveLastArgs <ReturnType(Types0...), ReturnType(Transfer1, Types1...), 
 
 template <typename ReturnType, typename... ArgTypes, typename... ParentTypes, typename... CapturedTypes>
 Function<ReturnType(ArgTypes...)> bind_last(Function<ReturnType(ArgTypes...)> &&, Function<ReturnType(ParentTypes...)>& f, CapturedTypes... CapturedArgs) {
-    using CaptureFP = CaptureLast<ReturnType(ArgTypes...), FunctorFPAllocator, CapturedTypes...>;
-    static_assert(sizeof(CaptureFP) <= FUNCTOR_SIZE, "Size of bound arguments is too large" );
-    CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator.alloc());
+    using CaptureFP = CaptureLast<ReturnType(ArgTypes...), FunctorFPAllocator::instance, CapturedTypes...>;
+    static_assert(sizeof(CaptureFP) <= alloc_size::functorfp, "Size of bound arguments is too large" );
+    CaptureFP * newf = reinterpret_cast<CaptureFP *>(detail::FunctorFPAllocator::instance().alloc());
     CORE_UTIL_ASSERT_MSG(newf, "Function container memory allocation failed");
     new(newf) CaptureFP(f,polyfill::forward<CapturedTypes>(CapturedArgs)...);
     return Function<ReturnType(ArgTypes...)>(static_cast<FunctionInterface<ReturnType(ArgTypes...)>*>(newf));

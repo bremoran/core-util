@@ -33,7 +33,7 @@ class FunctionInterface <ReturnType(ArgTypes...)> {
 public:
     FunctionInterface() : refcnt(0) {}
     virtual ReturnType operator () (ArgTypes&&... Args) = 0;
-    virtual ContainerAllocator *get_allocator() = 0;
+    virtual ContainerAllocator & get_allocator() = 0;
     inline uint32_t inc()
     {
         return mbed::util::atomic_incr(&refcnt, static_cast<uint32_t>(1));

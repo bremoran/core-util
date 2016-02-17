@@ -17,49 +17,68 @@
 #define FUNCTIONAL_DETAIL_ALLOCATORS_HPP
 
 #include "interface.hpp"
+
 #include "core-util/ExtendablePoolAllocator.h"
 #include "ualloc/ualloc.h"
 
+#include <cstdint>
 namespace functional {
 namespace detail {
 
 class ContainerAllocator : public mbed::util::ExtendablePoolAllocator {
 public:
-    ContainerAllocator(size_t initial_elements, size_t new_pool_elements, size_t element_size,
-        UAllocTraits_t alloc_traits, unsigned alignment = MBED_UTIL_POOL_ALLOC_DEFAULT_ALIGN)
-    : mbed::util::ExtendablePoolAllocator()
-    {
-        this->init(initial_elements, new_pool_elements, element_size, alloc_traits, alignment);
-    }
     template <typename FunctionType>
-    bool free(FunctionInterface<FunctionType> * ptr) {
+    void free(FunctionInterface<FunctionType> * ptr) {
         ptr->~FunctionInterface<FunctionType>();
         mbed::util::ExtendablePoolAllocator::free(ptr);
-        return true;
+    }
+    ContainerAllocator(std::size_t initial_elements, std::size_t new_pool_elements, std::size_t element_size) :
+        mbed::util::ExtendablePoolAllocator()
+    {
+        this->init(initial_elements, new_pool_elements, element_size, UAllocTraits_t{.flags = UALLOC_TRAITS_NEVER_FREE},
+            MBED_UTIL_POOL_ALLOC_DEFAULT_ALIGN);
     }
 };
 
-#if YOTTA_CONFIG_CORE_UTIL_FUNCTIONAL_FUNCTOR_SIZE
-#define FUNCTOR_SIZE YOTTA_CONFIG_CORE_UTIL_FUNCTIONAL_FUNCTOR_SIZE
-#else
+template <std::size_t ALLOC_SIZE>
+class ContainerAllocatorWrapper {
+public:
+    static const std::size_t size = ALLOC_SIZE;
+    static ContainerAllocator & instance();
+};
+
+namespace alloc_size {
+class BaseClass {
+public:
+    virtual void base_function(){}
+};
+class VirtualClass : public BaseClass {
+    virtual void base_function(){}
+};
+class UnknownClass;
+
+#ifndef YOTTA_CONFIG_CORE_UTIL_FUNCTIONAL_FUNCTOR_SIZE
 /*
- * Optimization note: This size was chosen to allow a Function to bind a DNS response.
+ * This size was chosen to allow a Function to bind a DNS response.
+ * 4 bytes for a reference count
  * 4 bytes for the vtable pointers
  * 4 bytes for the base Function
  * 128/8 bytes for an IPv6 address
  * 4 bytes for a char* pointer.
  * 4 bytes of padding to round out to 8-byte alignment.
- *
- * This size should be optimized further by examining application requirements.
  */
-#define FUNCTOR_SIZE (4 + 4 + (128/8) + 4 + 4)
+#define YOTTA_CONFIG_CORE_UTIL_FUNCTIONAL_FUNCTOR_SIZE \
+    ((sizeof(std::uint32_t) + sizeof(VirtualClass) + sizeof(UnknownClass *) + 128/8 + sizeof(char *) + 7) & ~7)
 #endif
 
+const std::size_t staticfp = sizeof(std::uint32_t) + sizeof(VirtualClass) + sizeof(void(*)());
+const std::size_t memberfp = sizeof(std::uint32_t) + sizeof(VirtualClass) + sizeof(UnknownClass *) + sizeof(void (UnknownClass::*)());
+const std::size_t functorfp = YOTTA_CONFIG_CORE_UTIL_FUNCTIONAL_FUNCTOR_SIZE;
+}
 
-extern ContainerAllocator StaticFPAllocator;
-extern ContainerAllocator MemberFPAllocator;
-extern ContainerAllocator FunctorFPAllocator;
-
+using StaticFPAllocator  = ContainerAllocatorWrapper<alloc_size::staticfp>;
+using MemberFPAllocator  = ContainerAllocatorWrapper<alloc_size::memberfp>;
+using FunctorFPAllocator = ContainerAllocatorWrapper<alloc_size::functorfp>;
 
 } // detail
 } // functional
