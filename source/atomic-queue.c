@@ -20,6 +20,23 @@
 #include <stddef.h>
 #include "cmsis.h"
 
+int atomic_cas_deref_uint32( uint32_t * volatile *ptr, uint32_t ** currentValue, uint32_t expectedValue, uint32_t *newValue, uintptr_t offset) {
+    uint32_t *current;
+    current = (uint32_t *)__LDREXW((volatile uint32_t *)ptr);
+    if (currentValue != NULL) {
+        *currentValue = current;
+    }
+    if (current == NULL) {
+        return -1;
+    } else if ( *(uint32_t *)((uintptr_t)current + offset) != expectedValue) {
+        return 1;
+    } else if(!__STREXW((uint32_t)newValue, (volatile uint32_t *)ptr)) {
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
 void lfq_push_tail(struct lockfree_queue * q, struct lockfree_queue_element * e)
 {
     CORE_UTIL_ASSERT_MSG(q != NULL, "null queue used");
@@ -31,43 +48,33 @@ void lfq_push_tail(struct lockfree_queue * q, struct lockfree_queue_element * e)
     } while (!__sync_bool_compare_and_swap(&q->tail, e->next, e));
 }
 
-volatile int trip = 0;
-
-int tripped() {
-    return trip;
-}
-
 struct lockfree_queue_element * lfq_pop_head(struct lockfree_queue * q)
 {
-    struct lockfree_queue_element * rx;
     CORE_UTIL_ASSERT_MSG(q != NULL, "null queue used");
     if (q == NULL) {
         return NULL;
     }
-    while (1) {
+    struct lockfree_queue_element * current;
+    int fail = 1;
+    while (fail) {
         // Set the element reference pointer to the tail pointer
         struct lockfree_queue_element * volatile * px = &q->tail;
         if (*px == NULL) {
             return NULL;
         }
-        while (1) {
-            rx = *px;
-            if (rx == NULL) {
-                break;
+        fail = 1;
+        while (fail > 0) {
+            fail = atomic_cas_deref_uint32((uint32_t * volatile *)px,
+                            (uint32_t **)&current,
+                            (uint32_t) NULL,
+                            NULL,
+                            offsetof(struct lockfree_queue_element, next));
+            if (fail == 1) {
+                px = &current->next;
             }
-            if (rx->next == NULL) {
-                break;
-            }
-            px = &rx->next;
-        }
-        if (rx == NULL) {
-            continue;
-        }
-        if(__sync_bool_compare_and_swap(px, rx, NULL)){
-            break;
         }
     }
-    return rx;
+    return current;
 }
 
 
